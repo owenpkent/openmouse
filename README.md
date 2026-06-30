@@ -11,9 +11,11 @@ It is a clean-room, open-source clone of the excellent (closed-source)
 the approach can be studied, forked, and improved. OpenMouse is not affiliated
 with or endorsed by Ease Apps.
 
-> **Status: early MVP.** The cursor follows the mouse and performs dwell clicks.
-> The richer feature set (gesture menu, multiple click modes, navigation
-> shortcuts) is on the roadmap below.
+> **Status: working early version.** The cursor follows the mouse with dwell and
+> standard clicks, and an on-screen menu adds double-tap, long-press, drag,
+> swipe, scroll, and Back / Home / Recent. The pure logic is unit tested and the
+> app builds against the current Android toolchain. The remaining items (tremor
+> filter, pinch-to-zoom, a settings screen) are on the roadmap below.
 
 ## Why "integrated directly into Android"
 

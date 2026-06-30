@@ -24,5 +24,8 @@ tagged release.
 ### Notes
 
 - Built as an `AccessibilityService`; installs on Android 7.0+ with no root.
+- Toolchain: AGP 9.0.1 (AGP's built-in Kotlin, no standalone Kotlin plugin),
+  Gradle 9.2.1, compileSdk 36, minSdk 24. The app builds and all unit tests pass
+  via `./gradlew test`. The Gradle wrapper jar is committed.
 - Known limitation: while active, the overlay captures finger touch as well as
   the mouse. The Android 14+ `onMotionEvent` path will fix this.
