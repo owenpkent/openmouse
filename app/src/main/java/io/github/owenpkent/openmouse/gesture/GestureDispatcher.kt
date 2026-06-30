@@ -53,11 +53,22 @@ class GestureDispatcher(private val service: AccessibilityService) {
      */
     fun scroll(x: Float, y: Float, revealAbove: Boolean, onFinished: () -> Unit = {}) {
         val dm = service.resources.displayMetrics
-        val half = (SCROLL_DISTANCE_DP * dm.density) / 2f
+        val dist = SCROLL_DISTANCE_DP * dm.density
         val maxY = dm.heightPixels.toFloat()
-        // To reveal content above, the finger moves downward, and vice versa.
-        val fromY = (if (revealAbove) y - half else y + half).coerceIn(0f, maxY)
-        val toY = (if (revealAbove) y + half else y - half).coerceIn(0f, maxY)
+
+        // Keep the full stroke length: if the stroke would run off an edge, shift
+        // the whole thing inward rather than clamping one end (which would shorten
+        // or null the scroll exactly where the user scrolls most, near the edges).
+        var top = y - dist / 2f
+        var bottom = y + dist / 2f
+        if (top < 0f) { bottom -= top; top = 0f }
+        if (bottom > maxY) { top -= bottom - maxY; bottom = maxY }
+        top = top.coerceAtLeast(0f)
+        bottom = bottom.coerceAtMost(maxY)
+
+        // To reveal content above, the finger drags downward (top -> bottom).
+        val fromY = if (revealAbove) top else bottom
+        val toY = if (revealAbove) bottom else top
         line(x, fromY, x, toY, SCROLL_DURATION_MS, onFinished)
     }
 
