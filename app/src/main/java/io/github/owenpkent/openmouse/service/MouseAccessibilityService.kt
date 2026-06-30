@@ -1,12 +1,17 @@
 package io.github.owenpkent.openmouse.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import io.github.owenpkent.openmouse.click.DwellClicker
@@ -19,30 +24,26 @@ import io.github.owenpkent.openmouse.settings.OpenMouseSettings
 /**
  * The OpenMouse engine.
  *
- * On connect it adds a full-screen [CursorView] overlay that captures mouse
- * motion and draws the cross-hair plus the [GestureMenu]. A [DwellClicker]
- * watches positions and, when the pointer rests, fires the primary action --
- * the same action a physical left-click triggers. Both routes funnel through
- * [handlePrimaryAction], which selects a menu entry or performs the current
- * gesture via [GestureDispatcher].
+ * It adds a full-screen [CursorView] overlay that draws the cross-hair and the
+ * [GestureMenu]. A [DwellClicker] watches the pointer and, when it rests, fires
+ * the primary action -- the same action a physical left-click triggers. Both
+ * routes funnel through [handlePrimaryAction].
  *
- * Gesture modes:
- * - TAP / DOUBLE_TAP / LONG_PRESS act at one point.
- * - DRAG / SWIPE are two-point: the first action sets the start, the second the
- *   end (see [pendingX]/[pendingY]).
- * - SCROLL_UP / SCROLL_DOWN scroll at the cursor and stay selected so the user
- *   can repeat them; the one-shot modes revert to TAP after a single use.
- *
- * Overlay touchability is the one subtlety. The overlay must be touchable to
- * capture the mouse, but a touchable overlay also swallows the synthetic
- * gestures we inject. So [runGesture] makes the overlay click-through for the
- * duration of the gesture, then restores it.
- *
- * Known MVP limitation: because the overlay is touchable while active, finger
- * touch is also captured. On Android 14+ the cleaner path is a non-touchable
- * overlay plus AccessibilityService.onMotionEvent; that is left as a follow-up.
+ * Input capture has two paths:
+ * - **API 34+ ([modernInput]):** the overlay is permanently non-touchable, so it
+ *   never blocks finger touch and never swallows our own injected gestures. Mouse
+ *   motion/buttons/scroll arrive through [onMotionEvent]. This is the correct,
+ *   safe design.
+ * - **API 24-33 (legacy):** the only way to capture the mouse is a touchable
+ *   overlay, which has to be made click-through for each injected gesture (see
+ *   [runGesture]). A finger source-gate ([CursorView.onTouchEvent]) stops stray
+ *   touches from moving the cursor, a gesture watchdog prevents a dropped
+ *   callback from freezing the cursor, and an idle watchdog drops touchability
+ *   when no mouse is present so the touchscreen can never be locked out.
  */
 class MouseAccessibilityService : AccessibilityService() {
+
+    private val modernInput = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -61,8 +62,21 @@ class MouseAccessibilityService : AccessibilityService() {
     private var pendingX: Float? = null
     private var pendingY: Float? = null
 
+    // Legacy passthrough state (unused on the modern path).
+    private var gesturesInFlight = 0
+    private var lastPointerMs = 0L
+    private var captureSuspended = false
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+        if (modernInput) {
+            // Observe mouse motion events instead of capturing them with a
+            // touchable window.
+            serviceInfo = serviceInfo?.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_SEND_MOTION_EVENTS
+                motionEventSources = InputDevice.SOURCE_MOUSE
+            }
+        }
         addCursorOverlay()
     }
 
@@ -88,31 +102,91 @@ class MouseAccessibilityService : AccessibilityService() {
 
         val view = CursorView(this)
         view.gestureMenu = menu
-        view.onMove = { x, y -> clicker.onCursorMoved(x, y) }
+        // Legacy capture path: CursorView reports mouse events to these.
+        view.onMove = { x, y -> onPointerMoved(x, y, draw = false) }
         view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y) }
+        view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         cursorView = view
+
+        var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        if (modernInput) {
+            // Non-touchable: touch passes through, injected gestures pass through.
+            flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            flags,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
+            // Span the whole display, including any cutout, so the overlay's
+            // origin is the screen origin and view coordinates equal screen
+            // coordinates for both drawing and dispatchGesture.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
         }
         layoutParams = params
 
-        wm.addView(view, params)
+        try {
+            wm.addView(view, params)
+        } catch (e: Exception) {
+            // Adding the overlay failed; tear down so a later connect can retry.
+            cursorView = null
+            prefs.unregisterListener(settingsListener)
+            settings = null
+            return
+        }
+
         applySettings()
+
+        if (!modernInput) {
+            lastPointerMs = SystemClock.uptimeMillis()
+            handler.postDelayed(idleWatchdog, WATCHDOG_INTERVAL_MS)
+        }
+    }
+
+    /** API 34+ mouse stream. */
+    override fun onMotionEvent(event: MotionEvent) {
+        if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) return
+        val x = event.rawX
+        val y = event.rawY
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER,
+            MotionEvent.ACTION_HOVER_MOVE,
+            MotionEvent.ACTION_MOVE,
+            -> onPointerMoved(x, y, draw = true)
+
+            MotionEvent.ACTION_BUTTON_PRESS -> {
+                onPointerMoved(x, y, draw = true)
+                if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
+                    handlePrimaryAction(x, y)
+                }
+            }
+
+            MotionEvent.ACTION_SCROLL -> {
+                onPointerMoved(x, y, draw = true)
+                val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                if (v != 0f) handleScroll(x, y, v)
+            }
+        }
+    }
+
+    private fun onPointerMoved(x: Float, y: Float, draw: Boolean) {
+        lastPointerMs = SystemClock.uptimeMillis()
+        if (draw) cursorView?.setCursorPosition(x, y)
+        dwellClicker?.onCursorMoved(x, y)
     }
 
     /**
-     * Push the current settings onto the live components. Safe to call any time;
-     * it runs on connect and again whenever a preference changes (via
-     * [settingsListener], delivered on the main thread in-process).
+     * Push the current settings onto the live components. Runs on connect and on
+     * any preference change (via [settingsListener], on the main thread).
      */
     private fun applySettings() {
         val prefs = settings ?: return
@@ -125,8 +199,6 @@ class MouseAccessibilityService : AccessibilityService() {
 
         // Dwell click can be turned off entirely (physical-button clicks still work).
         if (prefs.dwellEnabled) dwellClicker?.start() else dwellClicker?.stop()
-
-        cursorView?.invalidate()
     }
 
     /**
@@ -144,7 +216,6 @@ class MouseAccessibilityService : AccessibilityService() {
         }
         // Don't let a resting mouse immediately fire again; require a move first.
         dwellClicker?.lockUntilMove()
-        cursorView?.invalidate()
     }
 
     private fun onMenuAction(menu: GestureMenu, action: GestureAction) {
@@ -152,13 +223,13 @@ class MouseAccessibilityService : AccessibilityService() {
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            GestureAction.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            GestureAction.QUICK_SETTINGS -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             GestureAction.TOGGLE -> menu.toggleExpanded()
-            else -> {
-                // Any selectable mode. Switching modes cancels a pending drag.
-                menu.currentMode = action
-                clearPending()
-            }
+            else -> menu.currentMode = action // a selectable tap/drag/scroll mode
         }
+        // Any menu choice cancels a half-started two-point gesture.
+        clearPending()
     }
 
     private fun performMode(mode: GestureAction, x: Float, y: Float) {
@@ -186,6 +257,12 @@ class MouseAccessibilityService : AccessibilityService() {
 
             else -> Unit // navigation actions never reach here
         }
+    }
+
+    private fun handleScroll(x: Float, y: Float, vscroll: Float) {
+        val dispatcher = gestureDispatcher ?: return
+        // Wheel-up (vscroll > 0) reveals content above.
+        runGesture { done -> dispatcher.scroll(x, y, revealAbove = vscroll > 0f, done) }
     }
 
     /**
@@ -224,18 +301,71 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Inject a gesture, briefly making the overlay click-through so the injected
-     * events land on the app below instead of on our own overlay. [dispatch]
-     * must invoke its callback when the gesture finishes so touchability is
-     * restored.
+     * Inject a gesture. On the modern path the overlay is already non-touchable,
+     * so we dispatch directly. On the legacy path we make the overlay
+     * click-through for the duration of the gesture and restore it afterward,
+     * ref-counted so overlapping gestures cannot restore it early, with a
+     * watchdog so a dropped callback cannot leave it stuck non-touchable.
      */
     private fun runGesture(dispatch: (onFinished: () -> Unit) -> Unit) {
-        setOverlayTouchable(false)
+        if (modernInput) {
+            dispatch { }
+            return
+        }
+        beginPassthrough()
         // Give WindowManager a frame to register the window as non-touchable
         // before the gesture is injected, otherwise the overlay can swallow it.
         handler.postDelayed({
-            dispatch { setOverlayTouchable(true) }
+            dispatch { endPassthrough() }
         }, TAP_PASSTHROUGH_DELAY_MS)
+    }
+
+    private fun beginPassthrough() {
+        gesturesInFlight++
+        setOverlayTouchable(false)
+        handler.removeCallbacks(passthroughWatchdog)
+        handler.postDelayed(passthroughWatchdog, MAX_GESTURE_MS)
+    }
+
+    private fun endPassthrough() {
+        gesturesInFlight = (gesturesInFlight - 1).coerceAtLeast(0)
+        if (gesturesInFlight == 0) {
+            handler.removeCallbacks(passthroughWatchdog)
+            setOverlayTouchable(true)
+        }
+    }
+
+    // Force the overlay touchable again if a gesture callback was dropped, so the
+    // cursor can never get stuck unable to capture the mouse.
+    private val passthroughWatchdog = Runnable {
+        gesturesInFlight = 0
+        setOverlayTouchable(true)
+    }
+
+    // Legacy lockout guard: if no mouse has been seen for a while, drop overlay
+    // touchability so the bare touchscreen works; sample periodically to detect a
+    // returning mouse and re-arm.
+    private val idleWatchdog = object : Runnable {
+        override fun run() {
+            if (gesturesInFlight == 0) {
+                val idle = SystemClock.uptimeMillis() - lastPointerMs > IDLE_SUSPEND_MS
+                if (idle && !captureSuspended) {
+                    captureSuspended = true
+                    setOverlayTouchable(false)
+                } else if (captureSuspended) {
+                    val sampleStart = SystemClock.uptimeMillis()
+                    setOverlayTouchable(true)
+                    handler.postDelayed({
+                        if (lastPointerMs >= sampleStart) {
+                            captureSuspended = false // mouse came back; stay active
+                        } else if (captureSuspended) {
+                            setOverlayTouchable(false) // still gone; suspend again
+                        }
+                    }, SAMPLE_MS)
+                }
+            }
+            handler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+        }
     }
 
     private fun setOverlayTouchable(touchable: Boolean) {
@@ -272,6 +402,9 @@ class MouseAccessibilityService : AccessibilityService() {
         gestureMenu = null
         pendingX = null
         pendingY = null
+        gesturesInFlight = 0
+        captureSuspended = false
+        windowManager = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -294,5 +427,9 @@ class MouseAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAP_PASSTHROUGH_DELAY_MS = 24L
+        private const val MAX_GESTURE_MS = 1500L
+        private const val WATCHDOG_INTERVAL_MS = 2500L
+        private const val IDLE_SUSPEND_MS = 6000L
+        private const val SAMPLE_MS = 300L
     }
 }

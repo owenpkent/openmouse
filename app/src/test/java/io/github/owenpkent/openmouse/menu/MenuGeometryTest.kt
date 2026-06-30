@@ -6,7 +6,8 @@ import org.junit.Test
 
 /**
  * Unit tests for the pure menu layout / hit-testing. Uses round numbers so the
- * expected pixel positions are easy to follow.
+ * expected pixel positions are easy to follow. The toggle is anchored at its
+ * collapsed center and the grid grows below it (clamped on screen).
  */
 class MenuGeometryTest {
 
@@ -25,31 +26,44 @@ class MenuGeometryTest {
     }
 
     @Test
-    fun expandedLaysOutTwoColumnGridDockedRight() {
+    fun collapsedCentersTheToggle() {
         val g = geometry()
-        g.layout(width = 1000, height = 1000, expanded = true)
+        g.layout(1000, 1000, expanded = false)
 
-        // 6 rows (toggle + 5 item rows): totalH = 6*50 + 5*10 = 350; top = 325.
-        // Docked right: left = 1000 - 10 - 170 = 820, right = 990.
-        assertBounds(g.toggle, 820f, 325f, 990f, 375f)
-
-        // Grid starts at top + itemH + gap = 385.
-        assertBounds(g.item(0), 820f, 385f, 900f, 435f) // row 0, col 0
-        assertBounds(g.item(1), 910f, 385f, 990f, 435f) // row 0, col 1
-        assertBounds(g.item(2), 820f, 445f, 900f, 495f) // row 1, col 0
-        assertBounds(g.item(9), 910f, 625f, 990f, 675f) // row 4, col 1
+        // Toggle centered vertically: top = (1000 - 50) / 2 = 475.
+        assertBounds(g.toggle, 820f, 475f, 990f, 525f)
+        assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(830f, 500f, expanded = false))
+        // Items are not hit-tested while collapsed.
+        assertNull(g.hitTest(830f, 600f, expanded = false))
     }
 
     @Test
-    fun hitTestIdentifiesToggleItemsAndMisses() {
+    fun expandedAnchorsToggleAndGrowsGridBelow() {
+        val g = geometry()
+        g.layout(width = 1000, height = 1000, expanded = true)
+
+        // Toggle stays at its collapsed center (475); the grid grows below it.
+        assertBounds(g.toggle, 820f, 475f, 990f, 525f)
+
+        // Grid starts at toggle.bottom + gap = 525 + 10 = 535.
+        assertBounds(g.item(0), 820f, 535f, 900f, 585f) // row 0, col 0
+        assertBounds(g.item(1), 910f, 535f, 990f, 585f) // row 0, col 1
+        assertBounds(g.item(2), 820f, 595f, 900f, 645f) // row 1, col 0
+        assertBounds(g.item(9), 910f, 775f, 990f, 825f) // row 4, col 1
+    }
+
+    @Test
+    fun hitTestIdentifiesToggleItemsGapsAndMisses() {
         val g = geometry()
         g.layout(1000, 1000, expanded = true)
 
-        assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(830f, 350f, expanded = true))
-        assertEquals(0, g.hitTest(830f, 400f, expanded = true))
-        assertEquals(1, g.hitTest(950f, 400f, expanded = true))
-        assertEquals(2, g.hitTest(830f, 460f, expanded = true))
+        assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(830f, 500f, expanded = true))
+        assertEquals(0, g.hitTest(830f, 560f, expanded = true))
+        assertEquals(1, g.hitTest(950f, 560f, expanded = true))
+        assertEquals(2, g.hitTest(830f, 620f, expanded = true))
         assertNull(g.hitTest(500f, 500f, expanded = true)) // empty center of screen
+        assertNull(g.hitTest(830f, 590f, expanded = true)) // vertical gap between rows 0 and 1
+        assertNull(g.hitTest(905f, 560f, expanded = true)) // horizontal gap between columns
     }
 
     @Test
@@ -58,22 +72,21 @@ class MenuGeometryTest {
         g.layout(1000, 1000, expanded = true, dockRight = false)
 
         // Docked left: left = margin = 10, right = 10 + 170 = 180.
-        assertBounds(g.toggle, 10f, 325f, 180f, 375f)
-        assertBounds(g.item(0), 10f, 385f, 90f, 435f) // row 0, col 0
-        assertBounds(g.item(1), 100f, 385f, 180f, 435f) // row 0, col 1
-        assertEquals(0, g.hitTest(50f, 400f, expanded = true))
+        assertBounds(g.toggle, 10f, 475f, 180f, 525f)
+        assertBounds(g.item(0), 10f, 535f, 90f, 585f) // row 0, col 0
+        assertBounds(g.item(1), 100f, 535f, 180f, 585f) // row 0, col 1
+        assertEquals(0, g.hitTest(50f, 560f, expanded = true))
     }
 
     @Test
-    fun collapsedExposesOnlyTheToggle() {
+    fun clampsStripOnScreenWhenTooTall() {
         val g = geometry()
-        g.layout(1000, 1000, expanded = false)
+        // Expanded strip is 50 + 10 + (5*50 + 4*10) = 350 tall; screen is only 300.
+        g.layout(1000, 300, expanded = true)
 
-        // Only the toggle row: totalH = 50; top = 475.
-        assertBounds(g.toggle, 820f, 475f, 990f, 525f)
-        assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(830f, 500f, expanded = false))
-        // Items are not hit-tested while collapsed.
-        assertNull(g.hitTest(830f, 400f, expanded = false))
+        // Toggle is shifted up but stays fully on screen (top clamped to >= 0).
+        assertEquals(0f, g.toggle.top, EPS)
+        assertBounds(g.toggle, 820f, 0f, 990f, 50f)
     }
 
     private fun assertBounds(b: Bounds, left: Float, top: Float, right: Float, bottom: Float) {

@@ -51,4 +51,6 @@
     <string name="menu_back">Back</string>
     <string name="menu_home">Home</string>
     <string name="menu_recents">Recent</string>
+    <string name="menu_notifications">Notif</string>
+    <string name="menu_quick_settings">Quick</string>
 </resources>

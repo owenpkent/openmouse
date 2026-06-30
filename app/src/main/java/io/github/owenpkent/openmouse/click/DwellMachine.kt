@@ -67,7 +67,8 @@ class DwellMachine(
     fun poll(nowMs: Long): Poll {
         if (locked) return Poll(0f, false, currentX, currentY)
         val elapsed = nowMs - restStart
-        val progress = (elapsed.toFloat() / dwellTimeMs).coerceIn(0f, 1f)
+        // Guard against a zero/negative dwell time producing NaN/Infinity.
+        val progress = (elapsed.toFloat() / dwellTimeMs.coerceAtLeast(1L)).coerceIn(0f, 1f)
         if (progress >= 1f) {
             locked = true
             return Poll(0f, clicked = true, x = currentX, y = currentY)

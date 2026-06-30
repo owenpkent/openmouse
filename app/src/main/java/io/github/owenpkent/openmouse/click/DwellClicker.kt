@@ -63,6 +63,10 @@ class DwellClicker(
     /** Update dwell timing live (from a settings change). */
     fun configure(dwellTimeMs: Long, moveThresholdPx: Float) {
         machine.configure(dwellTimeMs, moveThresholdPx)
+        // Re-baseline so lowering the dwell time mid-rest can't fire an instant
+        // click; the next move past the threshold re-arms it.
+        machine.lockUntilMove()
+        onProgress(0f)
     }
 
     companion object {

@@ -81,6 +81,46 @@ class DwellMachineTest {
         assertTrue(m.poll(300L).clicked)
     }
 
+    @Test
+    fun configureThenLockPreventsInstantClick() {
+        // Mirrors what DwellClicker.configure does: change timing, then lock so a
+        // shorter dwell time cannot fire a click against already-elapsed rest.
+        val m = machine()
+        m.reset(0L)
+        m.onMove(100f, 100f, 0L) // unlocked, resting since t=0
+
+        m.configure(dwellTimeMs = 50L, moveThresholdPx = 10f)
+        m.lockUntilMove()
+        assertFalse(m.poll(1000L).clicked) // locked despite elapsed >> new dwell
+
+        m.onMove(140f, 140f, 1000L) // move re-arms with the new 50 ms time
+        assertTrue(m.poll(1050L).clicked)
+    }
+
+    @Test
+    fun zeroDwellTimeDoesNotProduceNaN() {
+        val m = machine()
+        m.reset(0L)
+        m.onMove(100f, 100f, 0L)
+        m.configure(dwellTimeMs = 0L, moveThresholdPx = 10f)
+
+        val p = m.poll(0L)
+        assertFalse(p.progress.isNaN())
+        assertEquals(0f, p.progress, EPS)
+        assertTrue(m.poll(5L).clicked) // guarded divisor (>=1) still completes
+    }
+
+    @Test
+    fun exactThresholdDoesNotUnlock() {
+        val m = machine() // threshold 10
+        m.reset(0L)
+        m.onMove(10f, 0f, 0L) // distance exactly 10 from the (0,0) anchor: strict > fails
+        assertFalse(m.poll(1000L).clicked)
+
+        m.onMove(11f, 0f, 50L) // 11 > 10 unlocks
+        assertTrue(m.poll(150L).clicked)
+    }
+
     companion object {
         private const val EPS = 0.001f
     }

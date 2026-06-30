@@ -35,12 +35,22 @@ class MenuGeometry(
     /** Recompute positions for the given screen size, expand state, and dock side. */
     fun layout(width: Int, height: Int, expanded: Boolean, dockRight: Boolean = true) {
         cells.clear()
-        val rows = if (expanded) ceilDiv(itemCount, columns) else 0
-        val totalRows = 1 + rows // toggle row plus the item grid
-        val totalH = totalRows * itemH + (totalRows - 1) * gap
-        val top = (height - totalH) / 2f
         val left = if (dockRight) width - margin - panelWidth else margin
         val right = left + panelWidth
+
+        val rows = if (expanded) ceilDiv(itemCount, columns) else 0
+        val gridHeight = if (rows > 0) rows * itemH + (rows - 1) * gap else 0f
+        val gridGap = if (rows > 0) gap else 0f
+        val stripHeight = itemH + gridGap + gridHeight
+
+        // Anchor the toggle at the vertical center it has when collapsed, so it
+        // does not jump when the grid expands. Shift the whole strip up only if
+        // the expanded grid would run off the bottom, and never above the top.
+        val collapsedTop = (height - itemH) / 2f
+        var top = collapsedTop
+        val maxTop = height - stripHeight
+        if (top > maxTop) top = maxTop
+        if (top < 0f) top = 0f
 
         toggle = Bounds(left, top, right, top + itemH)
         if (!expanded) return

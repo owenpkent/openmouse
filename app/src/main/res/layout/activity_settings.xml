@@ -30,6 +30,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:labelFor="@id/dwellSlider"
             android:text="@string/settings_dwell_time"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -47,6 +48,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:labelFor="@id/moveSlider"
             android:text="@string/settings_move_tolerance"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -64,6 +66,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:labelFor="@id/sizeSlider"
             android:text="@string/settings_cursor_size"
             android:textSize="16sp"
             android:textStyle="bold" />

@@ -14,7 +14,7 @@ import io.github.owenpkent.openmouse.R
  */
 enum class GestureAction {
     TAP, DOUBLE_TAP, LONG_PRESS, DRAG, SWIPE, SCROLL_UP, SCROLL_DOWN,
-    BACK, HOME, RECENTS, TOGGLE,
+    BACK, HOME, RECENTS, NOTIFICATIONS, QUICK_SETTINGS, TOGGLE,
     ;
 
     /** Two-point gestures need a start point and an end point. */
@@ -56,6 +56,8 @@ class GestureMenu(context: Context) {
         Item(GestureAction.BACK, context.getString(R.string.menu_back)),
         Item(GestureAction.HOME, context.getString(R.string.menu_home)),
         Item(GestureAction.RECENTS, context.getString(R.string.menu_recents)),
+        Item(GestureAction.NOTIFICATIONS, context.getString(R.string.menu_notifications)),
+        Item(GestureAction.QUICK_SETTINGS, context.getString(R.string.menu_quick_settings)),
     )
 
     private val d = context.resources.displayMetrics.density

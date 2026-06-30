@@ -58,32 +58,33 @@ physical mouse
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the details, including the
-overlay-touchability dance that lets injected taps reach the app below.
+two input-capture paths and how injected gestures reach the app below.
 
 ## Features
 
 **Working now**
 
 - Big cross-hair cursor that follows a USB or Bluetooth mouse / trackball
-- System pointer hidden so there is only one, highly visible cursor
 - Dwell click: rest the pointer and it clicks automatically, with a shrinking
   countdown for feedback
 - Standard click: a physical left-button press taps immediately
-- On-screen gesture menu (collapsible, docked to the right edge, two-column grid)
+- Scroll wheel scrolls the content under the cursor
+- On-screen gesture menu (collapsible, two-column grid, left or right edge)
 - Tap modes: single tap, double-tap, long-press
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
-- Navigation shortcuts from the menu: Back, Home, Recent apps
+- Navigation from the menu: Back, Home, Recent, Notifications, Quick Settings
 - Settings screen (applied live): dwell time, movement tolerance, cursor size,
   cursor color, menu side, and a dwell-click on/off toggle
+- On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
+  normally and a stray finger can never move the cursor or fire a click
 
 **Roadmap** (mirrors the original's feature set)
 
 - [ ] "Ease click": hold the button through a countdown, with a tremor filter
 - [ ] Pinch-to-zoom (two-finger gesture)
 - [ ] Drag-and-drop pickup (initial long-press before the drag)
-- [ ] Notification-shade shortcut in the menu
-- [ ] Use `onMotionEvent` on Android 14+ so finger touch is not captured
+- [ ] Hide the system pointer on Android 14+ (only the cross-hair is shown)
 
 ## Building
 

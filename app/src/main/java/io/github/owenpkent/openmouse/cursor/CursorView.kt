@@ -29,6 +29,9 @@ class CursorView(context: Context) : View(context) {
     /** Called when the physical primary (left) mouse button is pressed. */
     var onPrimaryButton: ((Float, Float) -> Unit)? = null
 
+    /** Called on a scroll-wheel turn: (x, y, vscroll) where vscroll > 0 is wheel-up. */
+    var onScroll: ((Float, Float, Float) -> Unit)? = null
+
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
 
@@ -87,6 +90,7 @@ class CursorView(context: Context) : View(context) {
 
     /** Move the cursor without a pointer event (e.g. driven by the service). */
     fun setCursorPosition(x: Float, y: Float) {
+        if (x == cursorX && y == cursorY) return
         cursorX = x
         cursorY = y
         invalidate()
@@ -94,7 +98,11 @@ class CursorView(context: Context) : View(context) {
 
     /** Set dwell countdown progress, 0 (idle) to 1 (about to click). */
     fun setCountdown(value: Float) {
-        countdown = value.coerceIn(0f, 1f)
+        val clamped = value.coerceIn(0f, 1f)
+        // Only redraw when the value actually changes; the dwell ticker calls
+        // this ~60x/s and is usually idle (0), so this avoids constant redraws.
+        if (clamped == countdown) return
+        countdown = clamped
         invalidate()
     }
 
@@ -130,6 +138,12 @@ class CursorView(context: Context) : View(context) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         gestureMenu?.updateLayout(w, h)
+        // Seed the cross-hair at screen center so it is visible right away,
+        // rather than hidden until the first mouse move.
+        if (cursorX < 0f && w > 0 && h > 0) {
+            cursorX = w / 2f
+            cursorY = h / 2f
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -165,17 +179,25 @@ class CursorView(context: Context) : View(context) {
         canvas.drawLine(x + centerGap, y, x + armLength, y, paint) // right
     }
 
+    // Only a mouse drives the cursor (this is the legacy pre-API-34 capture path;
+    // on API 34+ the overlay is non-touchable and the service uses onMotionEvent).
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (event.isFromSource(InputDevice.SOURCE_MOUSE) ||
-            event.isFromSource(InputDevice.SOURCE_TOUCHPAD)
-        ) {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_HOVER_ENTER,
-                MotionEvent.ACTION_HOVER_MOVE,
-                -> {
-                    report(event)
-                    return true
-                }
+        if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            return super.onGenericMotionEvent(event)
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER,
+            MotionEvent.ACTION_HOVER_MOVE,
+            -> {
+                report(event)
+                return true
+            }
+
+            MotionEvent.ACTION_SCROLL -> {
+                report(event)
+                val vscroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                if (vscroll != 0f) onScroll?.invoke(cursorX, cursorY, vscroll)
+                return true
             }
         }
         return super.onGenericMotionEvent(event)
@@ -185,15 +207,17 @@ class CursorView(context: Context) : View(context) {
     // the performClick() contract does not apply.
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // With a button held, a mouse delivers touch events rather than hover,
-        // so track those too to keep the cursor following a drag.
+        // Ignore non-mouse touches entirely: a stray finger or palm must not move
+        // the cross-hair or fire a click. A mouse with a button held delivers
+        // touch (not hover) events, so we still track those.
+        if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            return false
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 report(event)
                 // A physical left-click is an immediate "standard click".
-                if (event.isFromSource(InputDevice.SOURCE_MOUSE) &&
-                    (event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0
-                ) {
+                if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
                     onPrimaryButton?.invoke(cursorX, cursorY)
                 }
                 return true

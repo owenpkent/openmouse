@@ -33,6 +33,7 @@
             android:background="#22000000"
             android:textSize="16sp"
             android:textStyle="bold"
+            android:accessibilityLiveRegion="polite"
             android:text="@string/status_disabled" />
 
         <TextView

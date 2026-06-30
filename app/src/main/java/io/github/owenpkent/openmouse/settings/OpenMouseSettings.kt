@@ -22,23 +22,23 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getBoolean(KEY_DWELL_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_DWELL_ENABLED, value).apply()
 
-    /** Dwell countdown length in milliseconds. */
+    /** Dwell countdown length in milliseconds. Clamped to range on read and write. */
     var dwellTimeMs: Long
-        get() = prefs.getInt(KEY_DWELL_MS, DEFAULT_DWELL_MS).toLong()
+        get() = prefs.getInt(KEY_DWELL_MS, DEFAULT_DWELL_MS).coerceIn(MIN_DWELL_MS, MAX_DWELL_MS).toLong()
         set(value) = prefs.edit()
             .putInt(KEY_DWELL_MS, value.toInt().coerceIn(MIN_DWELL_MS, MAX_DWELL_MS))
             .apply()
 
     /** How far (in dp) the pointer may drift and still count as resting. */
     var moveThresholdDp: Float
-        get() = prefs.getFloat(KEY_MOVE_DP, DEFAULT_MOVE_DP)
+        get() = prefs.getFloat(KEY_MOVE_DP, DEFAULT_MOVE_DP).coerceIn(MIN_MOVE_DP, MAX_MOVE_DP)
         set(value) = prefs.edit()
             .putFloat(KEY_MOVE_DP, value.coerceIn(MIN_MOVE_DP, MAX_MOVE_DP))
             .apply()
 
     /** Cross-hair size multiplier. */
     var cursorScale: Float
-        get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE)
+        get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
         set(value) = prefs.edit()
             .putFloat(KEY_CURSOR_SCALE, value.coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE))
             .apply()

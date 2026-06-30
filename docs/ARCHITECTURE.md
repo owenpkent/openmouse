@@ -35,40 +35,50 @@ three on stock, unrooted Android:
    real taps and swipes. It requires `canPerformGestures="true"` in the service
    config.
 
-## Problem 1: hiding the system pointer
+## Input capture: two paths
 
-A connected mouse shows the platform pointer. We want only the big cross-hair.
-`CursorView.onResolvePointerIcon()` returns a `PointerIcon.TYPE_NULL`, which
-hides the hardware pointer whenever it is over our (full-screen) overlay. No
-special permission needed; works from API 24.
+Capturing a mouse without breaking the touchscreen is the central problem, and
+the answer depends on the API level.
 
-## Problem 2: our overlay swallows our own taps
+### Modern path (API 34+) -- the safe one
 
-This is the subtle one. To capture the mouse, the overlay must be **touchable**.
-But a touchable full-screen overlay also intercepts the synthetic taps that
-`dispatchGesture()` injects, so the tap never reaches the app underneath.
+The overlay is created **permanently non-touchable** (`FLAG_NOT_TOUCHABLE`).
+Mouse motion arrives through `AccessibilityService.onMotionEvent()`, enabled by
+setting `FLAG_SEND_MOTION_EVENTS` and `motionEventSources = SOURCE_MOUSE` on the
+service info. Because the overlay is non-touchable:
 
-OpenMouse resolves this in `MouseAccessibilityService.performTap()`:
+- finger touch passes straight through to the app below (no lockout, no stray
+  taps moving the cursor);
+- the synthetic gestures from `dispatchGesture()` pass through too, so there is
+  no passthrough dance and no per-tap latency.
 
-1. Add `FLAG_NOT_TOUCHABLE` to the overlay and call `updateViewLayout()`, making
-   it click-through.
-2. Wait one short beat (`TAP_PASSTHROUGH_DELAY_MS`) so WindowManager has
-   actually registered the window as non-touchable before the event is injected.
-3. Dispatch the tap.
-4. In the gesture result callback, remove `FLAG_NOT_TOUCHABLE` to resume
-   capturing the mouse.
+This is verified on the emulator: the overlay reports `inputConfig=NOT_TOUCHABLE`
+and a finger tap through it still launches the app underneath.
 
-The `DwellClicker` lock guarantees only one tap is in flight at a time, so there
-is no overlap between a tap-in-progress and the next countdown.
+### Legacy path (API 24-33)
 
-### The cleaner future path (Android 14+)
+Older devices have no `onMotionEvent`, so the only way to read the mouse is a
+**touchable** overlay (`CursorView` captures hover/touch). That has three sharp
+edges, each guarded:
 
-API 34 added `AccessibilityService.onMotionEvent()` plus
-`setMotionEventSources()`. With those, the service can *observe* mouse motion
-without a touchable overlay at all. That removes both the passthrough dance and
-the side effect of capturing finger touch. The plan is to use `onMotionEvent` on
-API 34+ and keep the touchable-overlay path as the fallback for 24–33. It is not
-wired up yet.
+1. *Stray finger input.* `CursorView.onTouchEvent` ignores any non-`SOURCE_MOUSE`
+   event, so a palm or fingertip can never move the cross-hair or fire a click.
+2. *Our overlay swallowing our own gestures.* `runGesture` makes the overlay
+   click-through (`FLAG_NOT_TOUCHABLE`) for the duration of each injected gesture,
+   then restores it. This is **ref-counted** (overlapping gestures cannot restore
+   touchability early) with a **watchdog** (a dropped gesture callback cannot
+   leave the overlay stuck non-touchable and freeze the cursor).
+3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
+   watchdog drops the overlay to non-touchable so the bare touchscreen works
+   again, then samples periodically to detect a returning mouse and re-arm. So
+   the device can never be locked out by a dead/disconnected mouse.
+
+### Hiding the system pointer
+
+`CursorView.onResolvePointerIcon()` returns `PointerIcon.TYPE_NULL`, hiding the
+hardware pointer while it is over the touchable overlay (the legacy path). On the
+modern non-touchable path the platform pointer remains visible; the cross-hair is
+drawn at the same point, so they coincide.
 
 ## The dwell state machine
 
@@ -81,12 +91,15 @@ wired up yet.
 
 It starts locked so a freshly enabled service never clicks before the user has
 moved the mouse. `SystemClock.uptimeMillis()` is used (not wall-clock) so the
-timing is immune to clock changes.
+timing is immune to clock changes. Changing the dwell time live re-baselines the
+timer and re-locks, so dragging the dwell slider down cannot fire an instant
+click against already-elapsed rest.
 
 ## Gesture modes and the menu
 
-A click is not always a single tap. `GestureMenu` holds a `currentMode`
-(`TAP`, `DOUBLE_TAP`, or `LONG_PRESS`) plus one-shot navigation entries.
+A click is not always a single tap. `GestureMenu` holds a `currentMode` (tap,
+double-tap, long-press, drag, swipe, or scroll) plus navigation entries
+(Back / Home / Recent / Notifications / Quick Settings).
 
 The menu is **not a real View hierarchy**. `CursorView` owns every pointer
 event, so a separate touchable button strip underneath it would never receive
@@ -97,19 +110,27 @@ left-click funnel into one method:
 ```
 handlePrimaryAction(x, y):
     if cursor is over a menu entry:
-        tap mode    -> set currentMode
-        Back/Home/Recent -> performGlobalAction(...)
-        toggle      -> expand / collapse the strip
+        tap/drag/scroll mode -> set currentMode
+        Back/Home/Recent/Notifications/QuickSettings -> performGlobalAction(...)
+        toggle -> expand / collapse the strip
+        (any menu choice also cancels a half-started two-point gesture)
     else:
         run the currentMode gesture at (x, y) via dispatchGesture
         reset non-tap modes back to TAP (one-shot)
     lock the dwell clicker until the cursor moves again
 ```
 
-Navigation actions use `performGlobalAction()` and need no overlay passthrough,
-since they do not inject touches into our window. Everything that injects touches
-(tap, double-tap, long-press, drag, swipe, scroll) goes through `runGesture`
-(the passthrough dance above).
+Navigation actions use `performGlobalAction()` and need no passthrough, since they
+do not inject touches into our window. Everything that injects touches (tap,
+double-tap, long-press, drag, swipe, scroll) goes through `runGesture`, which
+dispatches directly on the modern path and does the legacy passthrough dance on
+API 24-33.
+
+The strip is laid out by the pure `MenuGeometry`: a two-column grid whose toggle
+is anchored at its collapsed center (so it does not jump when the grid expands)
+and clamped to stay on screen on short/landscape displays. While collapsed, only
+the toggle is a hit target, so the rest of the screen clicks through; the
+left/right dock setting moves it off a busy edge.
 
 ### One-shot vs sticky modes
 
@@ -169,8 +190,11 @@ screen immediately.
 
 ## Coordinate space
 
-The overlay uses `FLAG_LAYOUT_IN_SCREEN | FLAG_LAYOUT_NO_LIMITS` and top-left
-gravity, so the view's `(0, 0)` is the screen's `(0, 0)`. `MotionEvent` view
-coordinates therefore match the screen coordinates `dispatchGesture()` expects.
-On devices with display cutouts or unusual insets this can drift slightly; a
-future settings screen may expose a calibration offset.
+The overlay uses `FLAG_LAYOUT_IN_SCREEN | FLAG_LAYOUT_NO_LIMITS`, top-left
+gravity, and `layoutInDisplayCutoutMode = ALWAYS`, so it spans the entire display
+and its `(0, 0)` is the screen's `(0, 0)`. The emulator confirms the frame is
+`Rect(0,0 - w,h)`. That means a single coordinate works everywhere: the value
+drawn for the cross-hair, hit-tested against the menu, and handed to
+`dispatchGesture()` are all the same screen-space point (the modern path reads
+`event.rawX/rawY`). Without the cutout mode the window could start below a notch
+and every injected tap would land at a fixed offset from the cross-hair.
