@@ -66,15 +66,17 @@ overlay-touchability dance that lets injected taps reach the app below.
 - System pointer hidden so there is only one, highly visible cursor
 - Dwell click: rest the pointer and it clicks automatically, with a shrinking
   countdown for feedback
+- Standard click: a physical left-button press taps immediately
+- On-screen gesture menu (collapsible, docked to the right edge) with tap,
+  double-tap, and long-press modes
+- Navigation shortcuts from the menu: Back, Home, Recent apps
 
 **Roadmap** (mirrors the original's feature set)
 
-- [ ] Standard click (left mouse button)
 - [ ] "Ease click": hold the button through a countdown, with a tremor filter
-- [ ] On-screen action menu (tap, double-tap, long-press, drag)
-- [ ] Swipe, scroll, and pinch-to-zoom gestures
-- [ ] Navigation shortcuts: back, home, recents, notifications
-- [ ] Settings: dwell time, cursor size/color, move threshold
+- [ ] Drag, swipe, scroll, and pinch-to-zoom (multi-point gestures)
+- [ ] Notification-shade shortcut in the menu
+- [ ] Settings: dwell time, cursor size/color, move threshold, menu position
 - [ ] Use `onMotionEvent` on Android 14+ so finger touch is not captured
 
 ## Building
@@ -117,6 +119,7 @@ app/src/main/
 │   ├── service/MouseAccessibilityService.kt   the engine
 │   ├── cursor/CursorView.kt            overlay: draws + captures input
 │   ├── click/DwellClicker.kt           dwell-to-click state machine
+│   ├── menu/GestureMenu.kt             on-screen gesture menu (modes + nav)
 │   └── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml

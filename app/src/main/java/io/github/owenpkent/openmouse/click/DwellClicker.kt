@@ -58,6 +58,18 @@ class DwellClicker(
         onProgress(0f)
     }
 
+    /**
+     * Lock the engine at the current position, as if it had just clicked. Used
+     * after a physical-button click so a resting mouse does not also dwell-click
+     * the same spot. The next move past the threshold unlocks it again.
+     */
+    fun lockUntilMove() {
+        locked = true
+        anchorX = currentX
+        anchorY = currentY
+        onProgress(0f)
+    }
+
     /** Feed a new cursor position in screen coordinates. */
     fun onCursorMoved(x: Float, y: Float) {
         currentX = x

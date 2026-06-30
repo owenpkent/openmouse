@@ -1,5 +1,6 @@
 package io.github.owenpkent.openmouse.cursor
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -9,6 +10,7 @@ import android.view.PointerIcon
 import android.view.View
 import androidx.core.content.ContextCompat
 import io.github.owenpkent.openmouse.R
+import io.github.owenpkent.openmouse.menu.GestureMenu
 
 /**
  * Full-screen transparent overlay that draws the big cross-hair cursor and
@@ -23,6 +25,12 @@ class CursorView(context: Context) : View(context) {
 
     /** Called with screen coordinates whenever the pointer moves. */
     var onMove: ((Float, Float) -> Unit)? = null
+
+    /** Called when the physical primary (left) mouse button is pressed. */
+    var onPrimaryButton: ((Float, Float) -> Unit)? = null
+
+    /** The gesture menu to draw and hit-test; set by the service. */
+    var gestureMenu: GestureMenu? = null
 
     private var cursorX = -1f
     private var cursorY = -1f
@@ -71,8 +79,16 @@ class CursorView(context: Context) : View(context) {
         invalidate()
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        gestureMenu?.updateLayout(w, h)
+    }
+
     override fun onDraw(canvas: Canvas) {
-        if (cursorX < 0f) return // nothing to draw until the first move
+        // The menu is always visible, even before the first pointer move.
+        gestureMenu?.draw(canvas, cursorX, cursorY)
+
+        if (cursorX < 0f) return // no cursor to draw until the first move
 
         // Countdown shrinks toward the center as the dwell timer fills.
         if (countdown > 0f) {
@@ -112,11 +128,24 @@ class CursorView(context: Context) : View(context) {
         return super.onGenericMotionEvent(event)
     }
 
+    // This overlay captures raw pointer input; it is not a clickable control, so
+    // the performClick() contract does not apply.
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         // With a button held, a mouse delivers touch events rather than hover,
         // so track those too to keep the cursor following a drag.
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN,
+            MotionEvent.ACTION_DOWN -> {
+                report(event)
+                // A physical left-click is an immediate "standard click".
+                if (event.isFromSource(InputDevice.SOURCE_MOUSE) &&
+                    (event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0
+                ) {
+                    onPrimaryButton?.invoke(cursorX, cursorY)
+                }
+                return true
+            }
+
             MotionEvent.ACTION_MOVE,
             MotionEvent.ACTION_UP,
             -> {

@@ -13,4 +13,10 @@
     <color name="cursor_countdown">#882962FF</color>
 
     <color name="ic_launcher_background">#FF0039CB</color>
+
+    <!-- Gesture menu -->
+    <color name="menu_item_bg">#DD202124</color>
+    <color name="menu_item_selected">#FF2962FF</color>
+    <color name="menu_item_hover">#55FFFFFF</color>
+    <color name="menu_text">#FFFFFFFF</color>
 </resources>

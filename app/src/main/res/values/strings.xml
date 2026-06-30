@@ -6,7 +6,7 @@
     <string name="title">OpenMouse</string>
     <string name="tagline">Control your device with a mouse, no touchscreen needed.</string>
 
-    <string name="status_enabled">OpenMouse is ON. Move your mouse to drive the cross-hair cursor; hold it still to click.</string>
+    <string name="status_enabled">OpenMouse is ON. Move your mouse to drive the cross-hair cursor; hold it still or click to act. Use the menu on the right edge for double-tap, hold, and navigation.</string>
     <string name="status_disabled">OpenMouse is OFF. Enable the accessibility service to start.</string>
 
     <string name="how_it_works_title">How it works</string>
@@ -14,4 +14,12 @@
 
     <string name="open_settings">Open accessibility settings</string>
     <string name="refresh_status">Refresh status</string>
+
+    <!-- Gesture menu labels -->
+    <string name="menu_tap">Tap</string>
+    <string name="menu_double_tap">2×</string>
+    <string name="menu_long_press">Hold</string>
+    <string name="menu_back">Back</string>
+    <string name="menu_home">Home</string>
+    <string name="menu_recents">Recent</string>
 </resources>

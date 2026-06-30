@@ -10,7 +10,8 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `MouseAccessibilityService` | Lifecycle, wiring, and the overlay window. Owns the others. |
 | `CursorView` | The overlay view: draws the cross-hair and captures pointer input. |
 | `DwellClicker` | Decides *when* a rest counts as a click; emits countdown progress. |
-| `GestureDispatcher` | Injects the actual tap via `dispatchGesture()`. |
+| `GestureMenu` | Right-edge menu: tap modes, navigation actions, and hit-testing. |
+| `GestureDispatcher` | Injects taps, double-taps, and long-presses via `dispatchGesture()`. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
@@ -77,6 +78,36 @@ wired up yet.
 It starts locked so a freshly enabled service never clicks before the user has
 moved the mouse. `SystemClock.uptimeMillis()` is used (not wall-clock) so the
 timing is immune to clock changes.
+
+## Gesture modes and the menu
+
+A click is not always a single tap. `GestureMenu` holds a `currentMode`
+(`TAP`, `DOUBLE_TAP`, or `LONG_PRESS`) plus one-shot navigation entries.
+
+The menu is **not a real View hierarchy**. `CursorView` owns every pointer
+event, so a separate touchable button strip underneath it would never receive
+hover. Instead the menu is pure data: `CursorView` draws it, and the service
+hit-tests the cursor position against it. Both the dwell timer and a physical
+left-click funnel into one method:
+
+```
+handlePrimaryAction(x, y):
+    if cursor is over a menu entry:
+        tap mode    -> set currentMode
+        Back/Home/Recent -> performGlobalAction(...)
+        toggle      -> expand / collapse the strip
+    else:
+        run the currentMode gesture at (x, y) via dispatchGesture
+        reset non-tap modes back to TAP (one-shot)
+    lock the dwell clicker until the cursor moves again
+```
+
+Navigation actions use `performGlobalAction()` and need no overlay passthrough,
+since they do not inject touches into our window. Tap / double-tap / long-press
+do, so they go through `runGesture` (the passthrough dance above).
+
+Drag, swipe, scroll, and pinch are multi-point gestures and are not wired up
+yet; they will reuse `dispatchGesture` with multiple or longer strokes.
 
 ## Coordinate space
 
