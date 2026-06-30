@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <color name="brand_primary">#FF2962FF</color>
+    <color name="brand_primary_dark">#FF0039CB</color>
+
+    <!-- Cursor colors: a bright fill with a dark outline so the cross-hair
+         stays visible over any background. -->
+    <color name="cursor_fill">#FFFFEB3B</color>
+    <color name="cursor_outline">#FF000000</color>
+    <color name="cursor_countdown">#882962FF</color>
+
+    <color name="ic_launcher_background">#FF0039CB</color>
+</resources>

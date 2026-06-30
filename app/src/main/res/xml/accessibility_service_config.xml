@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    canPerformGestures="true" is what allows the service to call
+    dispatchGesture(), the API used to inject taps and swipes at the cursor.
+
+    flagRequestTouchExplorationMode is intentionally NOT set: we want raw
+    pointer input, not touch-exploration semantics.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100"
+    android:settingsActivity="io.github.owenpkent.openmouse.MainActivity" />

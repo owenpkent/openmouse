@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">OpenMouse</string>
+    <string name="accessibility_service_label">OpenMouse cursor</string>
+    <string name="accessibility_service_description">Lets you control this device with a physical mouse or trackball. OpenMouse draws a large cross-hair cursor and clicks for you when the pointer rests still (dwell click), so no buttons are required. Built for people with tremors or limited fine motor control.</string>
+
+    <string name="title">OpenMouse</string>
+    <string name="tagline">Control your device with a mouse, no touchscreen needed.</string>
+
+    <string name="status_enabled">OpenMouse is ON. Move your mouse to drive the cross-hair cursor; hold it still to click.</string>
+    <string name="status_disabled">OpenMouse is OFF. Enable the accessibility service to start.</string>
+
+    <string name="how_it_works_title">How it works</string>
+    <string name="how_it_works_body">1. Plug in a USB or Bluetooth mouse.\n2. Tap the button below and turn on \"OpenMouse cursor\" under Installed services.\n3. A big cross-hair follows the mouse. Stop moving and it clicks automatically.</string>
+
+    <string name="open_settings">Open accessibility settings</string>
+    <string name="refresh_status">Refresh status</string>
+</resources>

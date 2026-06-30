@@ -1,0 +1,11 @@
+# Normalize all text files to LF in the repository.
+* text=auto eol=lf
+
+# Windows batch scripts must use CRLF.
+*.bat text eol=crlf
+
+# Binary assets: never touch line endings.
+*.png binary
+*.jar binary
+*.jks binary
+*.keystore binary
