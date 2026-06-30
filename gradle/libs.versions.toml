@@ -1,6 +1,7 @@
 [versions]
-agp = "8.6.1"
-kotlin = "2.0.20"
+# AGP 9 ships built-in Kotlin support, so there is no separate Kotlin plugin
+# version to manage here.
+agp = "9.0.1"
 coreKtx = "1.13.1"
 appcompat = "1.7.0"
 material = "1.12.0"
@@ -14,4 +15,3 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

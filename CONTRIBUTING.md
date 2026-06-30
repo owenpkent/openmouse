@@ -6,10 +6,9 @@ gestures.
 
 ## Getting set up
 
-1. Install **Android Studio** (Koala or newer) or a JDK 17 + the Android SDK.
-2. Open the project folder. Android Studio generates the Gradle wrapper jar on
-   first sync. (From the CLI without Android Studio, run
-   `gradle wrapper --gradle-version 8.9` once with a system Gradle installed.)
+1. Install **Android Studio** (Koala or newer) or a JDK 17+ and the Android SDK.
+2. Open the project folder and let Android Studio sync. The Gradle wrapper is
+   committed, so `./gradlew` also works from the command line.
 3. Build and test:
    ```bash
    ./gradlew assembleDebug   # build the APK

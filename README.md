@@ -84,21 +84,19 @@ overlay-touchability dance that lets injected taps reach the app below.
 
 ## Building
 
-You need **Android Studio** (Koala or newer) or a local JDK 17 + Android SDK.
+You need **Android Studio** (Koala or newer) or a local JDK 17+ and the Android
+SDK. The project uses **AGP 9.0.1** with AGP's built-in Kotlin (no separate
+Kotlin plugin), targets **SDK 36**, and the committed Gradle wrapper pins
+**Gradle 9.2.1**.
 
 ```bash
 # In Android Studio: File ▸ Open ▸ select this folder, then Run ▸ app.
-# Or from the command line once the SDK is configured:
-./gradlew assembleDebug
+# Or from the command line:
+./gradlew assembleDebug   # build the APK
+./gradlew test            # run the unit tests
 ```
 
-> **Note on the Gradle wrapper:** this repo intentionally does not commit the
-> binary `gradle/wrapper/gradle-wrapper.jar`. Android Studio regenerates it the
-> first time you open the project. If you build from the CLI without Android
-> Studio, run `gradle wrapper --gradle-version 8.9` once (with a system Gradle
-> installed) to create it.
-
-Create a `local.properties` with your SDK path if Android Studio does not:
+If Android Studio does not create `local.properties`, add it with your SDK path:
 
 ```
 sdk.dir=/path/to/Android/Sdk
