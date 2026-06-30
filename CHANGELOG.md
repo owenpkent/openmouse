@@ -19,6 +19,9 @@ tagged release.
 - Two-point gestures: drag and swipe, with a start-point marker.
 - Scroll up and scroll down at the cursor (repeatable).
 - Navigation shortcuts: Back, Home, and Recent apps.
+- Settings screen, applied live while the cursor is running: dwell time,
+  movement tolerance, cursor size, cursor color, menu side, and a dwell-click
+  on/off toggle.
 - Unit tests for the pure `DwellMachine` and `MenuGeometry` cores.
 
 ### Notes

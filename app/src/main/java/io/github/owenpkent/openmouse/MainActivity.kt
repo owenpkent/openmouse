@@ -25,6 +25,9 @@ class MainActivity : AppCompatActivity() {
         binding.openSettingsButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
+        binding.appSettingsButton.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
         binding.refreshButton.setOnClickListener { updateStatus() }
     }
 

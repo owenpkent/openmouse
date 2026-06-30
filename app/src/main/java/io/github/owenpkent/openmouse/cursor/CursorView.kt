@@ -39,23 +39,33 @@ class CursorView(context: Context) : View(context) {
     private var pendingY = -1f
 
     private val d = resources.displayMetrics.density
-    private val armLength = 34f * d
-    private val centerGap = 7f * d
-    private val maxCountdownRadius = 30f * d
-    private val dotRadius = 3f * d
-    private val pendingRadius = 10f * d
+
+    // Base sizes at scale 1.0; the cross-hair scales with cursorScale.
+    private val baseArm = 34f * d
+    private val baseGap = 7f * d
+    private val baseCountdown = 30f * d
+    private val baseDot = 3f * d
+    private val baseFillStroke = 4f * d
+    private val baseOutlineStroke = 8f * d
+    private val pendingRadius = 10f * d // start marker, intentionally unscaled
+
+    private var cursorScale = 1f
+    private val armLength get() = baseArm * cursorScale
+    private val centerGap get() = baseGap * cursorScale
+    private val maxCountdownRadius get() = baseCountdown * cursorScale
+    private val dotRadius get() = baseDot * cursorScale
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        strokeWidth = 4f * d
+        strokeWidth = baseFillStroke
         color = ContextCompat.getColor(context, R.color.cursor_fill)
     }
 
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        strokeWidth = 8f * d
+        strokeWidth = baseOutlineStroke
         color = ContextCompat.getColor(context, R.color.cursor_outline)
     }
 
@@ -85,6 +95,21 @@ class CursorView(context: Context) : View(context) {
     /** Set dwell countdown progress, 0 (idle) to 1 (about to click). */
     fun setCountdown(value: Float) {
         countdown = value.coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    /** Scale the cross-hair (1.0 = default size). */
+    fun setCursorScale(scale: Float) {
+        cursorScale = scale
+        fillPaint.strokeWidth = baseFillStroke * scale
+        outlinePaint.strokeWidth = baseOutlineStroke * scale
+        invalidate()
+    }
+
+    /** Set the cross-hair fill color (ARGB int). The dark outline is unchanged. */
+    fun setCursorColor(color: Int) {
+        fillPaint.color = color
+        dotPaint.color = color
         invalidate()
     }
 

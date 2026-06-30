@@ -2,6 +2,7 @@ package io.github.owenpkent.openmouse.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +14,7 @@ import io.github.owenpkent.openmouse.cursor.CursorView
 import io.github.owenpkent.openmouse.gesture.GestureDispatcher
 import io.github.owenpkent.openmouse.menu.GestureAction
 import io.github.owenpkent.openmouse.menu.GestureMenu
+import io.github.owenpkent.openmouse.settings.OpenMouseSettings
 
 /**
  * The OpenMouse engine.
@@ -51,6 +53,10 @@ class MouseAccessibilityService : AccessibilityService() {
     private var gestureDispatcher: GestureDispatcher? = null
     private var gestureMenu: GestureMenu? = null
 
+    private var settings: OpenMouseSettings? = null
+    private val settingsListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> applySettings() }
+
     // Start point of an in-progress two-point gesture (drag/swipe), or null.
     private var pendingX: Float? = null
     private var pendingY: Float? = null
@@ -65,6 +71,10 @@ class MouseAccessibilityService : AccessibilityService() {
 
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         windowManager = wm
+
+        val prefs = OpenMouseSettings(this)
+        settings = prefs
+        prefs.registerListener(settingsListener)
 
         gestureDispatcher = GestureDispatcher(this)
         val menu = GestureMenu(this)
@@ -96,7 +106,27 @@ class MouseAccessibilityService : AccessibilityService() {
         layoutParams = params
 
         wm.addView(view, params)
-        clicker.start()
+        applySettings()
+    }
+
+    /**
+     * Push the current settings onto the live components. Safe to call any time;
+     * it runs on connect and again whenever a preference changes (via
+     * [settingsListener], delivered on the main thread in-process).
+     */
+    private fun applySettings() {
+        val prefs = settings ?: return
+        val density = resources.displayMetrics.density
+
+        dwellClicker?.configure(prefs.dwellTimeMs, prefs.moveThresholdDp * density)
+        cursorView?.setCursorScale(prefs.cursorScale)
+        cursorView?.setCursorColor(prefs.cursorColor)
+        gestureMenu?.setDockRight(prefs.menuOnRight)
+
+        // Dwell click can be turned off entirely (physical-button clicks still work).
+        if (prefs.dwellEnabled) dwellClicker?.start() else dwellClicker?.stop()
+
+        cursorView?.invalidate()
     }
 
     /**
@@ -225,6 +255,8 @@ class MouseAccessibilityService : AccessibilityService() {
 
     private fun removeCursorOverlay() {
         handler.removeCallbacksAndMessages(null)
+        settings?.unregisterListener(settingsListener)
+        settings = null
         dwellClicker?.stop()
         cursorView?.let { view ->
             try {

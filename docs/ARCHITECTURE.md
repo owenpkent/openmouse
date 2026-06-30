@@ -14,7 +14,9 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `GestureMenu` | Menu drawing and cell-to-action mapping. |
 | `MenuGeometry` | **Pure** menu layout and hit-testing (unit tested). |
 | `GestureDispatcher` | Injects taps, drags, swipes, and scrolls via `dispatchGesture()`. |
+| `OpenMouseSettings` | Typed, range-clamped wrapper over SharedPreferences. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
+| `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
 `DwellClicker`, and on a dwell becomes a `tap(x, y)` through `GestureDispatcher`.
@@ -147,6 +149,23 @@ into classes with **no Android imports**, which run as plain JVM tests:
 The pattern to follow when adding behavior: put the logic in a pure class, test
 it there, and keep the Android wrapper a straight pass-through. Tests live in
 `app/src/test/` and run with `./gradlew test`.
+
+## Settings and live updates
+
+`SettingsActivity` has no Save button. Each control writes straight to
+`OpenMouseSettings` (a SharedPreferences wrapper that clamps every value to its
+range). The service registers a `OnSharedPreferenceChangeListener` and, on any
+change, calls `applySettings()` to push the new values onto the live components:
+
+- dwell time / movement tolerance -> `DwellClicker.configure()`
+- cursor size / color -> `CursorView.setCursorScale()` / `setCursorColor()`
+- menu side -> `GestureMenu.setDockRight()`
+- dwell on/off -> start or stop the dwell ticker (physical clicks still work)
+
+Because the settings screen and the service run in the same process, they share
+one SharedPreferences instance, so the listener fires on the main thread and the
+view updates are safe. The result is that tuning a slider moves the cursor on
+screen immediately.
 
 ## Coordinate space
 

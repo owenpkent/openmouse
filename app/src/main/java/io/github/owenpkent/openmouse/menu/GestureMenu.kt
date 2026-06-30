@@ -36,6 +36,10 @@ class GestureMenu(context: Context) {
     var expanded = false
         private set
 
+    /** Dock the strip on the right edge (true) or the left (false). */
+    var dockRight = true
+        private set
+
     /** The active tap mode, always one of the selectable modes (never a nav action). */
     var currentMode = GestureAction.TAP
 
@@ -94,12 +98,18 @@ class GestureMenu(context: Context) {
     fun updateLayout(width: Int, height: Int) {
         lastWidth = width
         lastHeight = height
-        geometry.layout(width, height, expanded)
+        geometry.layout(width, height, expanded, dockRight)
     }
 
     fun toggleExpanded() {
         expanded = !expanded
-        geometry.layout(lastWidth, lastHeight, expanded)
+        geometry.layout(lastWidth, lastHeight, expanded, dockRight)
+    }
+
+    /** Move the strip to the right (true) or left (false) edge. */
+    fun setDockRight(value: Boolean) {
+        dockRight = value
+        geometry.layout(lastWidth, lastHeight, expanded, dockRight)
     }
 
     /** Which menu entry (if any) sits under [x], [y]. */

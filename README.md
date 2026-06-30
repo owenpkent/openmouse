@@ -74,6 +74,8 @@ overlay-touchability dance that lets injected taps reach the app below.
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
 - Navigation shortcuts from the menu: Back, Home, Recent apps
+- Settings screen (applied live): dwell time, movement tolerance, cursor size,
+  cursor color, menu side, and a dwell-click on/off toggle
 
 **Roadmap** (mirrors the original's feature set)
 
@@ -81,7 +83,6 @@ overlay-touchability dance that lets injected taps reach the app below.
 - [ ] Pinch-to-zoom (two-finger gesture)
 - [ ] Drag-and-drop pickup (initial long-press before the drag)
 - [ ] Notification-shade shortcut in the menu
-- [ ] Settings: dwell time, cursor size/color, move threshold, menu position
 - [ ] Use `onMotionEvent` on Android 14+ so finger touch is not captured
 
 ## Building
@@ -119,12 +120,14 @@ To stop, turn the service back off in accessibility settings.
 app/src/main/
 ├── java/io/github/owenpkent/openmouse/
 │   ├── MainActivity.kt                 onboarding + enable button
+│   ├── SettingsActivity.kt             settings screen (live-applied)
 │   ├── service/MouseAccessibilityService.kt   the engine
 │   ├── cursor/CursorView.kt            overlay: draws + captures input
 │   ├── click/DwellClicker.kt           Android timer wrapper
 │   ├── click/DwellMachine.kt           pure dwell logic (unit tested)
 │   ├── menu/GestureMenu.kt             menu: drawing + action mapping
 │   ├── menu/MenuGeometry.kt            pure layout + hit-testing (unit tested)
+│   ├── settings/OpenMouseSettings.kt   SharedPreferences-backed settings
 │   └── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml

@@ -53,6 +53,18 @@ class MenuGeometryTest {
     }
 
     @Test
+    fun leftDockMirrorsToTheLeftEdge() {
+        val g = geometry()
+        g.layout(1000, 1000, expanded = true, dockRight = false)
+
+        // Docked left: left = margin = 10, right = 10 + 170 = 180.
+        assertBounds(g.toggle, 10f, 325f, 180f, 375f)
+        assertBounds(g.item(0), 10f, 385f, 90f, 435f) // row 0, col 0
+        assertBounds(g.item(1), 100f, 385f, 180f, 435f) // row 0, col 1
+        assertEquals(0, g.hitTest(50f, 400f, expanded = true))
+    }
+
+    @Test
     fun collapsedExposesOnlyTheToggle() {
         val g = geometry()
         g.layout(1000, 1000, expanded = false)

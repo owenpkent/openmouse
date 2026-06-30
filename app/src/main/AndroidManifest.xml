@@ -18,6 +18,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title"
+            android:parentActivityName=".MainActivity" />
+
         <!--
             The cursor engine. An AccessibilityService is the only stock-Android
             mechanism that can both observe pointer input and inject taps/gestures

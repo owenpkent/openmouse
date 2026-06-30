@@ -60,6 +60,11 @@ class DwellClicker(
         machine.onMove(x, y, SystemClock.uptimeMillis())
     }
 
+    /** Update dwell timing live (from a settings change). */
+    fun configure(dwellTimeMs: Long, moveThresholdPx: Float) {
+        machine.configure(dwellTimeMs, moveThresholdPx)
+    }
+
     companion object {
         private const val TICK_INTERVAL_MS = 16L
     }

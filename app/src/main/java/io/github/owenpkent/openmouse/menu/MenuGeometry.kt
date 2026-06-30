@@ -32,15 +32,15 @@ class MenuGeometry(
     /** Bounds of item [index] (only meaningful while expanded). */
     fun item(index: Int): Bounds = cells[index]
 
-    /** Recompute positions for the given screen size and expand state. */
-    fun layout(width: Int, height: Int, expanded: Boolean) {
+    /** Recompute positions for the given screen size, expand state, and dock side. */
+    fun layout(width: Int, height: Int, expanded: Boolean, dockRight: Boolean = true) {
         cells.clear()
         val rows = if (expanded) ceilDiv(itemCount, columns) else 0
         val totalRows = 1 + rows // toggle row plus the item grid
         val totalH = totalRows * itemH + (totalRows - 1) * gap
         val top = (height - totalH) / 2f
-        val left = width - margin - panelWidth
-        val right = width - margin.toFloat()
+        val left = if (dockRight) width - margin - panelWidth else margin
+        val right = left + panelWidth
 
         toggle = Bounds(left, top, right, top + itemH)
         if (!expanded) return

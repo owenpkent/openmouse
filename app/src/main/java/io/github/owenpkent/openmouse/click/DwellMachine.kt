@@ -15,9 +15,15 @@ import kotlin.math.hypot
  *   next move past the threshold.
  */
 class DwellMachine(
-    private val dwellTimeMs: Long = DEFAULT_DWELL_MS,
-    private val moveThresholdPx: Float = DEFAULT_MOVE_THRESHOLD_PX,
+    private var dwellTimeMs: Long = DEFAULT_DWELL_MS,
+    private var moveThresholdPx: Float = DEFAULT_MOVE_THRESHOLD_PX,
 ) {
+    /** Update the timing live (e.g. from a settings change). */
+    fun configure(dwellTimeMs: Long, moveThresholdPx: Float) {
+        this.dwellTimeMs = dwellTimeMs
+        this.moveThresholdPx = moveThresholdPx
+    }
+
     private var anchorX = 0f
     private var anchorY = 0f
     private var currentX = 0f

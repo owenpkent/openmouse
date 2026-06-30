@@ -14,6 +14,31 @@
 
     <string name="open_settings">Open accessibility settings</string>
     <string name="refresh_status">Refresh status</string>
+    <string name="open_app_settings">OpenMouse settings</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">OpenMouse settings</string>
+    <string name="settings_dwell_click">Dwell click (auto-click on rest)</string>
+    <string name="settings_dwell_time">Dwell time</string>
+    <string name="settings_move_tolerance">Movement tolerance</string>
+    <string name="settings_cursor_size">Cursor size</string>
+    <string name="settings_cursor_color">Cursor color</string>
+    <string name="settings_menu_side">Menu side</string>
+    <string name="settings_menu_left">Left</string>
+    <string name="settings_menu_right">Right</string>
+    <string name="settings_apply_note">Changes apply immediately while OpenMouse is running.</string>
+    <string name="settings_seconds">%1$.1f s</string>
+    <string name="settings_dp">%1$d dp</string>
+    <string name="settings_percent">%1$d%%</string>
+
+    <string-array name="cursor_color_names">
+        <item>Yellow</item>
+        <item>Green</item>
+        <item>Cyan</item>
+        <item>Magenta</item>
+        <item>White</item>
+        <item>Orange</item>
+    </string-array>
 
     <!-- Gesture menu labels -->
     <string name="menu_tap">Tap</string>
