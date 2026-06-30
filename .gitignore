@@ -37,3 +37,6 @@ captures/
 
 # Logs
 *.log
+
+# Crash artifacts
+*.stackdump
