@@ -27,9 +27,9 @@
     <string name="settings_menu_left">Left</string>
     <string name="settings_menu_right">Right</string>
     <string name="settings_apply_note">Changes apply immediately while OpenMouse is running.</string>
-    <string name="settings_seconds">%1$.1f s</string>
-    <string name="settings_dp">%1$d dp</string>
-    <string name="settings_percent">%1$d%%</string>
+    <string name="settings_dwell_value">Dwell time:   %1$.1f s</string>
+    <string name="settings_move_value">Movement tolerance:   %1$d dp</string>
+    <string name="settings_size_value">Cursor size:   %1$d%%</string>
 
     <string-array name="cursor_color_names">
         <item>Yellow</item>

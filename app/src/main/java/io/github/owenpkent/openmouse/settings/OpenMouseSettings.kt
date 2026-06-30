@@ -2,6 +2,7 @@ package io.github.owenpkent.openmouse.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 /**
  * Typed wrapper over SharedPreferences for OpenMouse's user settings.
@@ -20,40 +21,32 @@ class OpenMouseSettings(context: Context) {
 
     var dwellEnabled: Boolean
         get() = prefs.getBoolean(KEY_DWELL_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_DWELL_ENABLED, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_DWELL_ENABLED, value) }
 
     /** Dwell countdown length in milliseconds. Clamped to range on read and write. */
     var dwellTimeMs: Long
         get() = prefs.getInt(KEY_DWELL_MS, DEFAULT_DWELL_MS).coerceIn(MIN_DWELL_MS, MAX_DWELL_MS).toLong()
-        set(value) = prefs.edit()
-            .putInt(KEY_DWELL_MS, value.toInt().coerceIn(MIN_DWELL_MS, MAX_DWELL_MS))
-            .apply()
+        set(value) = prefs.edit { putInt(KEY_DWELL_MS, value.toInt().coerceIn(MIN_DWELL_MS, MAX_DWELL_MS)) }
 
     /** How far (in dp) the pointer may drift and still count as resting. */
     var moveThresholdDp: Float
         get() = prefs.getFloat(KEY_MOVE_DP, DEFAULT_MOVE_DP).coerceIn(MIN_MOVE_DP, MAX_MOVE_DP)
-        set(value) = prefs.edit()
-            .putFloat(KEY_MOVE_DP, value.coerceIn(MIN_MOVE_DP, MAX_MOVE_DP))
-            .apply()
+        set(value) = prefs.edit { putFloat(KEY_MOVE_DP, value.coerceIn(MIN_MOVE_DP, MAX_MOVE_DP)) }
 
     /** Cross-hair size multiplier. */
     var cursorScale: Float
         get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
-        set(value) = prefs.edit()
-            .putFloat(KEY_CURSOR_SCALE, value.coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE))
-            .apply()
+        set(value) = prefs.edit { putFloat(KEY_CURSOR_SCALE, value.coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)) }
 
     /** Index into [CURSOR_COLORS]. */
     var cursorColorIndex: Int
         get() = prefs.getInt(KEY_CURSOR_COLOR, 0).coerceIn(0, CURSOR_COLORS.size - 1)
-        set(value) = prefs.edit()
-            .putInt(KEY_CURSOR_COLOR, value.coerceIn(0, CURSOR_COLORS.size - 1))
-            .apply()
+        set(value) = prefs.edit { putInt(KEY_CURSOR_COLOR, value.coerceIn(0, CURSOR_COLORS.size - 1)) }
 
     /** True docks the gesture menu on the right edge, false on the left. */
     var menuOnRight: Boolean
         get() = prefs.getBoolean(KEY_MENU_RIGHT, true)
-        set(value) = prefs.edit().putBoolean(KEY_MENU_RIGHT, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_MENU_RIGHT, value) }
 
     /** The resolved cursor color (ARGB int) for the current index. */
     val cursorColor: Int get() = CURSOR_COLORS[cursorColorIndex]

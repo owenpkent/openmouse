@@ -63,18 +63,15 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateDwellLabel(ms: Long) {
-        binding.dwellLabel.text = getString(R.string.settings_dwell_time) +
-            "   " + getString(R.string.settings_seconds, ms / 1000f)
+        binding.dwellLabel.text = getString(R.string.settings_dwell_value, ms / 1000f)
     }
 
     private fun updateMoveLabel(dp: Float) {
-        binding.moveLabel.text = getString(R.string.settings_move_tolerance) +
-            "   " + getString(R.string.settings_dp, dp.toInt())
+        binding.moveLabel.text = getString(R.string.settings_move_value, dp.toInt())
     }
 
     private fun updateSizeLabel(scale: Float) {
-        binding.sizeLabel.text = getString(R.string.settings_cursor_size) +
-            "   " + getString(R.string.settings_percent, (scale * 100).toInt())
+        binding.sizeLabel.text = getString(R.string.settings_size_value, (scale * 100).toInt())
     }
 
     private fun setupColors() {
