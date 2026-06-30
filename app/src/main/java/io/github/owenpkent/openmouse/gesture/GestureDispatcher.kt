@@ -19,32 +19,58 @@ class GestureDispatcher(private val service: AccessibilityService) {
 
     /** Inject a single tap at screen coordinates ([x], [y]). */
     fun tap(x: Float, y: Float, onFinished: () -> Unit = {}) {
-        val stroke = pointStroke(x, y, startTime = 0L, duration = TAP_DURATION_MS)
+        val stroke = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS)
         dispatch(GestureDescription.Builder().addStroke(stroke).build(), onFinished)
     }
 
     /** Inject two quick taps at ([x], [y]). */
     fun doubleTap(x: Float, y: Float, onFinished: () -> Unit = {}) {
-        val first = pointStroke(x, y, startTime = 0L, duration = TAP_DURATION_MS)
-        val second = pointStroke(x, y, startTime = DOUBLE_TAP_GAP_MS, duration = TAP_DURATION_MS)
+        val first = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS, startTime = 0L)
+        val second = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS, startTime = DOUBLE_TAP_GAP_MS)
         dispatch(GestureDescription.Builder().addStroke(first).addStroke(second).build(), onFinished)
     }
 
     /** Inject a long press (press-and-hold) at ([x], [y]). */
     fun longPress(x: Float, y: Float, onFinished: () -> Unit = {}) {
-        val stroke = pointStroke(x, y, startTime = 0L, duration = LONG_PRESS_DURATION_MS)
+        val stroke = pathStroke(Path().apply { moveTo(x, y) }, LONG_PRESS_DURATION_MS)
         dispatch(GestureDescription.Builder().addStroke(stroke).build(), onFinished)
     }
 
-    private fun pointStroke(
-        x: Float,
-        y: Float,
-        startTime: Long,
-        duration: Long,
-    ): GestureDescription.StrokeDescription {
-        val path = Path().apply { moveTo(x, y) }
-        return GestureDescription.StrokeDescription(path, startTime, duration)
+    /** Slow drag from ([x1], [y1]) to ([x2], [y2]) -- carries content or a handle. */
+    fun drag(x1: Float, y1: Float, x2: Float, y2: Float, onFinished: () -> Unit = {}) {
+        line(x1, y1, x2, y2, DRAG_DURATION_MS, onFinished)
     }
+
+    /** Fast swipe / fling from ([x1], [y1]) to ([x2], [y2]). */
+    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, onFinished: () -> Unit = {}) {
+        line(x1, y1, x2, y2, SWIPE_DURATION_MS, onFinished)
+    }
+
+    /**
+     * Scroll the content at ([x], [y]). [revealAbove] true scrolls toward the
+     * top of the content (finger drags down); false scrolls toward the bottom.
+     * The stroke is clamped to the display so it stays on-screen near the edges.
+     */
+    fun scroll(x: Float, y: Float, revealAbove: Boolean, onFinished: () -> Unit = {}) {
+        val dm = service.resources.displayMetrics
+        val half = (SCROLL_DISTANCE_DP * dm.density) / 2f
+        val maxY = dm.heightPixels.toFloat()
+        // To reveal content above, the finger moves downward, and vice versa.
+        val fromY = (if (revealAbove) y - half else y + half).coerceIn(0f, maxY)
+        val toY = (if (revealAbove) y + half else y - half).coerceIn(0f, maxY)
+        line(x, fromY, x, toY, SCROLL_DURATION_MS, onFinished)
+    }
+
+    private fun line(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long, onFinished: () -> Unit) {
+        val path = Path().apply {
+            moveTo(x1, y1)
+            lineTo(x2, y2)
+        }
+        dispatch(GestureDescription.Builder().addStroke(pathStroke(path, duration)).build(), onFinished)
+    }
+
+    private fun pathStroke(path: Path, duration: Long, startTime: Long = 0L) =
+        GestureDescription.StrokeDescription(path, startTime, duration)
 
     private fun dispatch(gesture: GestureDescription, onFinished: () -> Unit) {
         val callback = object : AccessibilityService.GestureResultCallback() {
@@ -67,5 +93,12 @@ class GestureDispatcher(private val service: AccessibilityService) {
 
         // Comfortably past the platform long-press timeout (~400-500 ms).
         private const val LONG_PRESS_DURATION_MS = 700L
+
+        private const val DRAG_DURATION_MS = 600L
+        private const val SWIPE_DURATION_MS = 120L
+        private const val SCROLL_DURATION_MS = 250L
+
+        // How far a single scroll travels, in dp.
+        private const val SCROLL_DISTANCE_DP = 240f
     }
 }

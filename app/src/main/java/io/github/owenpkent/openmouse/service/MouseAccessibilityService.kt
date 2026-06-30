@@ -21,13 +21,20 @@ import io.github.owenpkent.openmouse.menu.GestureMenu
  * motion and draws the cross-hair plus the [GestureMenu]. A [DwellClicker]
  * watches positions and, when the pointer rests, fires the primary action --
  * the same action a physical left-click triggers. Both routes funnel through
- * [handlePrimaryAction], which either selects a menu entry or performs the
- * current gesture via [GestureDispatcher].
+ * [handlePrimaryAction], which selects a menu entry or performs the current
+ * gesture via [GestureDispatcher].
+ *
+ * Gesture modes:
+ * - TAP / DOUBLE_TAP / LONG_PRESS act at one point.
+ * - DRAG / SWIPE are two-point: the first action sets the start, the second the
+ *   end (see [pendingX]/[pendingY]).
+ * - SCROLL_UP / SCROLL_DOWN scroll at the cursor and stay selected so the user
+ *   can repeat them; the one-shot modes revert to TAP after a single use.
  *
  * Overlay touchability is the one subtlety. The overlay must be touchable to
- * capture the mouse, but a touchable overlay also swallows the synthetic taps we
- * inject. So [runGesture] makes the overlay click-through for the duration of
- * the gesture, then restores it.
+ * capture the mouse, but a touchable overlay also swallows the synthetic
+ * gestures we inject. So [runGesture] makes the overlay click-through for the
+ * duration of the gesture, then restores it.
  *
  * Known MVP limitation: because the overlay is touchable while active, finger
  * touch is also captured. On Android 14+ the cleaner path is a non-touchable
@@ -43,6 +50,10 @@ class MouseAccessibilityService : AccessibilityService() {
     private var dwellClicker: DwellClicker? = null
     private var gestureDispatcher: GestureDispatcher? = null
     private var gestureMenu: GestureMenu? = null
+
+    // Start point of an in-progress two-point gesture (drag/swipe), or null.
+    private var pendingX: Float? = null
+    private var pendingY: Float? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -99,39 +110,87 @@ class MouseAccessibilityService : AccessibilityService() {
         if (menu != null && hit != null) {
             onMenuAction(menu, hit)
         } else {
-            val mode = menu?.currentMode ?: GestureAction.TAP
-            performGesture(mode, x, y)
-            // Non-tap modes are one-shot: revert to plain tap after use.
-            if (mode != GestureAction.TAP) menu?.currentMode = GestureAction.TAP
+            performMode(menu?.currentMode ?: GestureAction.TAP, x, y)
         }
-        // Whether we acted on the menu or the screen, don't let a resting mouse
-        // immediately fire again; require a move first.
+        // Don't let a resting mouse immediately fire again; require a move first.
         dwellClicker?.lockUntilMove()
         cursorView?.invalidate()
     }
 
     private fun onMenuAction(menu: GestureMenu, action: GestureAction) {
         when (action) {
-            GestureAction.TAP,
-            GestureAction.DOUBLE_TAP,
-            GestureAction.LONG_PRESS,
-            -> menu.currentMode = action
-
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             GestureAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             GestureAction.TOGGLE -> menu.toggleExpanded()
+            else -> {
+                // Any selectable mode. Switching modes cancels a pending drag.
+                menu.currentMode = action
+                clearPending()
+            }
         }
     }
 
-    private fun performGesture(mode: GestureAction, x: Float, y: Float) {
+    private fun performMode(mode: GestureAction, x: Float, y: Float) {
         val dispatcher = gestureDispatcher ?: return
         when (mode) {
             GestureAction.TAP -> runGesture { done -> dispatcher.tap(x, y, done) }
-            GestureAction.DOUBLE_TAP -> runGesture { done -> dispatcher.doubleTap(x, y, done) }
-            GestureAction.LONG_PRESS -> runGesture { done -> dispatcher.longPress(x, y, done) }
+
+            GestureAction.DOUBLE_TAP -> {
+                runGesture { done -> dispatcher.doubleTap(x, y, done) }
+                resetToTap()
+            }
+
+            GestureAction.LONG_PRESS -> {
+                runGesture { done -> dispatcher.longPress(x, y, done) }
+                resetToTap()
+            }
+
+            GestureAction.DRAG, GestureAction.SWIPE -> performTwoPoint(mode, x, y)
+
+            GestureAction.SCROLL_UP ->
+                runGesture { done -> dispatcher.scroll(x, y, revealAbove = true, done) }
+
+            GestureAction.SCROLL_DOWN ->
+                runGesture { done -> dispatcher.scroll(x, y, revealAbove = false, done) }
+
             else -> Unit // navigation actions never reach here
         }
+    }
+
+    /**
+     * Two-point gestures: the first call records the start (and shows a marker),
+     * the second performs the gesture and reverts to a plain tap.
+     */
+    private fun performTwoPoint(mode: GestureAction, x: Float, y: Float) {
+        val startX = pendingX
+        val startY = pendingY
+        if (startX == null || startY == null) {
+            pendingX = x
+            pendingY = y
+            cursorView?.setPendingPoint(x, y)
+            return
+        }
+        val dispatcher = gestureDispatcher
+        if (dispatcher != null) {
+            if (mode == GestureAction.DRAG) {
+                runGesture { done -> dispatcher.drag(startX, startY, x, y, done) }
+            } else {
+                runGesture { done -> dispatcher.swipe(startX, startY, x, y, done) }
+            }
+        }
+        clearPending()
+        resetToTap()
+    }
+
+    private fun resetToTap() {
+        gestureMenu?.currentMode = GestureAction.TAP
+    }
+
+    private fun clearPending() {
+        pendingX = null
+        pendingY = null
+        cursorView?.clearPendingPoint()
     }
 
     /**
@@ -179,6 +238,8 @@ class MouseAccessibilityService : AccessibilityService() {
         dwellClicker = null
         gestureDispatcher = null
         gestureMenu = null
+        pendingX = null
+        pendingY = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

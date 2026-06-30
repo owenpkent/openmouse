@@ -67,14 +67,17 @@ overlay-touchability dance that lets injected taps reach the app below.
 - Dwell click: rest the pointer and it clicks automatically, with a shrinking
   countdown for feedback
 - Standard click: a physical left-button press taps immediately
-- On-screen gesture menu (collapsible, docked to the right edge) with tap,
-  double-tap, and long-press modes
+- On-screen gesture menu (collapsible, docked to the right edge, two-column grid)
+- Tap modes: single tap, double-tap, long-press
+- Drag and swipe: two-point gestures (click a start point, then an end point)
+- Scroll up / down at the cursor
 - Navigation shortcuts from the menu: Back, Home, Recent apps
 
 **Roadmap** (mirrors the original's feature set)
 
 - [ ] "Ease click": hold the button through a countdown, with a tremor filter
-- [ ] Drag, swipe, scroll, and pinch-to-zoom (multi-point gestures)
+- [ ] Pinch-to-zoom (two-finger gesture)
+- [ ] Drag-and-drop pickup (initial long-press before the drag)
 - [ ] Notification-shade shortcut in the menu
 - [ ] Settings: dwell time, cursor size/color, move threshold, menu position
 - [ ] Use `onMotionEvent` on Android 14+ so finger touch is not captured
@@ -118,17 +121,42 @@ app/src/main/
 │   ├── MainActivity.kt                 onboarding + enable button
 │   ├── service/MouseAccessibilityService.kt   the engine
 │   ├── cursor/CursorView.kt            overlay: draws + captures input
-│   ├── click/DwellClicker.kt           dwell-to-click state machine
-│   ├── menu/GestureMenu.kt             on-screen gesture menu (modes + nav)
+│   ├── click/DwellClicker.kt           Android timer wrapper
+│   ├── click/DwellMachine.kt           pure dwell logic (unit tested)
+│   ├── menu/GestureMenu.kt             menu: drawing + action mapping
+│   ├── menu/MenuGeometry.kt            pure layout + hit-testing (unit tested)
 │   └── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml
+
+app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests
+├── click/DwellMachineTest.kt
+└── menu/MenuGeometryTest.kt
 ```
+
+## Testing
+
+The Android-coupled classes (the service, the overlay view, the gesture
+dispatcher) are deliberately thin. The decision logic they wrap lives in pure
+classes with no Android dependencies, so it runs as fast JVM unit tests:
+
+- `DwellMachine` -- the dwell-to-click state machine (clock injected, not read)
+- `MenuGeometry` -- the menu's layout and hit-testing
+
+```bash
+./gradlew test          # run all unit tests
+./gradlew testDebugUnitTest
+```
+
+When adding behavior, prefer putting the logic in a pure class and testing it
+there, keeping the Android wrapper a straight pass-through.
 
 ## Contributing
 
 Issues and pull requests are welcome, especially from the AAC / accessibility
-community. The roadmap items above are good starting points.
+community. The roadmap items above are good starting points. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding conventions, and how to add
+a new gesture.
 
 ## License
 

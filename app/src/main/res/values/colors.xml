@@ -11,6 +11,8 @@
     <color name="cursor_fill">#FFFFEB3B</color>
     <color name="cursor_outline">#FF000000</color>
     <color name="cursor_countdown">#882962FF</color>
+    <!-- Marker shown at the start point of a two-point drag/swipe. -->
+    <color name="cursor_pending">#FF00E676</color>
 
     <color name="ic_launcher_background">#FF0039CB</color>
 

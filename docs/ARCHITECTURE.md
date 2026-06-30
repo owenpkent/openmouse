@@ -8,10 +8,12 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | File | Responsibility |
 | --- | --- |
 | `MouseAccessibilityService` | Lifecycle, wiring, and the overlay window. Owns the others. |
-| `CursorView` | The overlay view: draws the cross-hair and captures pointer input. |
-| `DwellClicker` | Decides *when* a rest counts as a click; emits countdown progress. |
-| `GestureMenu` | Right-edge menu: tap modes, navigation actions, and hit-testing. |
-| `GestureDispatcher` | Injects taps, double-taps, and long-presses via `dispatchGesture()`. |
+| `CursorView` | The overlay view: draws the cross-hair/menu and captures pointer input. |
+| `DwellClicker` | Android timer wrapper that drives `DwellMachine` from `SystemClock`. |
+| `DwellMachine` | **Pure** dwell-to-click state machine (unit tested). |
+| `GestureMenu` | Menu drawing and cell-to-action mapping. |
+| `MenuGeometry` | **Pure** menu layout and hit-testing (unit tested). |
+| `GestureDispatcher` | Injects taps, drags, swipes, and scrolls via `dispatchGesture()`. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
@@ -103,11 +105,48 @@ handlePrimaryAction(x, y):
 ```
 
 Navigation actions use `performGlobalAction()` and need no overlay passthrough,
-since they do not inject touches into our window. Tap / double-tap / long-press
-do, so they go through `runGesture` (the passthrough dance above).
+since they do not inject touches into our window. Everything that injects touches
+(tap, double-tap, long-press, drag, swipe, scroll) goes through `runGesture`
+(the passthrough dance above).
 
-Drag, swipe, scroll, and pinch are multi-point gestures and are not wired up
-yet; they will reuse `dispatchGesture` with multiple or longer strokes.
+### One-shot vs sticky modes
+
+After it runs, a mode either reverts to `TAP` (one-shot) or stays selected
+(sticky):
+
+- **One-shot**: double-tap, long-press, drag, swipe. You do one, then you are
+  back to tapping.
+- **Sticky**: tap, scroll-up, scroll-down. Scrolling is repeatable, so it stays
+  active and each click scrolls again.
+
+### Two-point gestures (drag, swipe)
+
+Drag and swipe need a start and an end. The first primary action records the
+start point (and `CursorView` draws a marker there); the second performs the
+gesture from start to end. They differ only in stroke duration: a slow stroke
+reads as a drag, a fast one as a fling. Selecting a different mode or toggling
+the menu cancels a pending start.
+
+`scroll` builds a vertical stroke centered on the cursor, clamped to the display
+so it stays on-screen near the edges. Pinch-to-zoom (two simultaneous strokes)
+and drag-and-drop pickup (a long-press before the move) are not wired up yet.
+
+## Testability: pure cores
+
+Anything that touches Android (`Handler`, `Canvas`, `WindowManager`,
+`dispatchGesture`) is awkward to unit test. So the non-trivial logic is split out
+into classes with **no Android imports**, which run as plain JVM tests:
+
+- `DwellMachine` -- the dwell decision logic. Time is a parameter (`poll(nowMs)`),
+  not read from `SystemClock`, so a test can drive it tick by tick. `DwellClicker`
+  is the only thing that knows about the real clock and the timer.
+- `MenuGeometry` -- layout and hit-testing on a plain `Bounds` rectangle (not
+  `android.graphics.RectF`, which is not available in JVM tests). `GestureMenu`
+  keeps the `Context`, `Paint`, and `Canvas` work.
+
+The pattern to follow when adding behavior: put the logic in a pure class, test
+it there, and keep the Android wrapper a straight pass-through. Tests live in
+`app/src/test/` and run with `./gradlew test`.
 
 ## Coordinate space
 

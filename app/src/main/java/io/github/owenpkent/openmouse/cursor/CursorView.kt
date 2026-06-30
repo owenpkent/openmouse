@@ -35,12 +35,15 @@ class CursorView(context: Context) : View(context) {
     private var cursorX = -1f
     private var cursorY = -1f
     private var countdown = 0f // 0 = idle, approaches 1 just before a click
+    private var pendingX = -1f // start point of a pending two-point gesture
+    private var pendingY = -1f
 
     private val d = resources.displayMetrics.density
     private val armLength = 34f * d
     private val centerGap = 7f * d
     private val maxCountdownRadius = 30f * d
     private val dotRadius = 3f * d
+    private val pendingRadius = 10f * d
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -66,6 +69,12 @@ class CursorView(context: Context) : View(context) {
         color = ContextCompat.getColor(context, R.color.cursor_countdown)
     }
 
+    private val pendingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3f * d
+        color = ContextCompat.getColor(context, R.color.cursor_pending)
+    }
+
     /** Move the cursor without a pointer event (e.g. driven by the service). */
     fun setCursorPosition(x: Float, y: Float) {
         cursorX = x
@@ -79,6 +88,20 @@ class CursorView(context: Context) : View(context) {
         invalidate()
     }
 
+    /** Mark the start point of a two-point gesture (drag/swipe). */
+    fun setPendingPoint(x: Float, y: Float) {
+        pendingX = x
+        pendingY = y
+        invalidate()
+    }
+
+    /** Clear the two-point start marker. */
+    fun clearPendingPoint() {
+        pendingX = -1f
+        pendingY = -1f
+        invalidate()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         gestureMenu?.updateLayout(w, h)
@@ -87,6 +110,11 @@ class CursorView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         // The menu is always visible, even before the first pointer move.
         gestureMenu?.draw(canvas, cursorX, cursorY)
+
+        // Start marker for an in-progress drag/swipe.
+        if (pendingX >= 0f) {
+            canvas.drawCircle(pendingX, pendingY, pendingRadius, pendingPaint)
+        }
 
         if (cursorX < 0f) return // no cursor to draw until the first move
 

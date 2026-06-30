@@ -19,6 +19,10 @@
     <string name="menu_tap">Tap</string>
     <string name="menu_double_tap">2×</string>
     <string name="menu_long_press">Hold</string>
+    <string name="menu_drag">Drag</string>
+    <string name="menu_swipe">Swipe</string>
+    <string name="menu_scroll_up">Scr ↑</string>
+    <string name="menu_scroll_down">Scr ↓</string>
     <string name="menu_back">Back</string>
     <string name="menu_home">Home</string>
     <string name="menu_recents">Recent</string>
