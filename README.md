@@ -165,6 +165,8 @@ community. The roadmap items above are good starting points.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
 - [SECURITY.md](SECURITY.md) — reporting a vulnerability
 - [docs/RELEASING.md](docs/RELEASING.md) — the plan for shipping to F-Droid / Play
+- [docs/UPSTREAMING.md](docs/UPSTREAMING.md) — the plan for getting it into Android
+  natively (AOSP / LineageOS)
 
 ## License
 
