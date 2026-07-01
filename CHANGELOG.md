@@ -38,6 +38,10 @@ tagged release.
 - The accessibility-service config no longer requests `canRetrieveWindowContent`
   or a broad event mask (a less alarming enable prompt), and its settings gear
   opens the settings screen.
+- Declared `android:isAccessibilityTool="true"` so the service reads as a genuine
+  accessibility tool (system UI and Google Play review).
+- Release builds are now minified with resource shrinking and use a conditional
+  signing config (`keystore.properties`, gitignored).
 
 ### Fixed
 
@@ -62,3 +66,7 @@ tagged release.
   cursor headlessly is not possible (the emulator has no mouse device and the
   framework filters injected events), so that part is covered by the unit tests
   plus the verified service configuration.
+- The repository is community-ready: Code of Conduct, Security policy, and
+  issue/PR templates, plus a privacy policy, F-Droid (fastlane) metadata, and
+  distribution plans in `docs/RELEASING.md` (F-Droid / Play) and
+  `docs/UPSTREAMING.md` (AOSP / LineageOS).
