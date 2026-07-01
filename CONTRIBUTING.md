@@ -19,11 +19,34 @@ gestures.
 To try a change on hardware: install the debug APK, plug in a mouse (USB OTG or
 Bluetooth), and enable **OpenMouse cursor** in Accessibility settings.
 
+### Smoke-testing on an emulator (no device needed)
+
+Much of the app can be verified headlessly. Boot an API 34+ AVD, install, and
+enable the service over adb (Android 14+ blocks sideloaded accessibility services
+until you grant the restricted-settings appop):
+
+```bash
+emulator -avd <name> -no-window -gpu swiftshader_indirect &
+adb install -r -t app/build/outputs/apk/debug/app-debug.apk
+adb shell appops set io.github.owenpkent.openmouse ACCESS_RESTRICTED_SETTINGS allow
+adb shell settings put secure enabled_accessibility_services \
+  io.github.owenpkent.openmouse/io.github.owenpkent.openmouse.service.MouseAccessibilityService
+adb shell settings put secure accessibility_enabled 1
+adb shell dumpsys window | grep -i openmouse   # overlay attached, NOT_TOUCHABLE?
+adb exec-out screencap -p > shot.png           # cross-hair + menu render?
+```
+
+This verifies the overlay, touch passthrough, rendering, and crashes. What it
+**cannot** do: drive a real mouse cursor. A headless emulator has no mouse device,
+and the accessibility framework filters `adb input`-injected events out of
+`onMotionEvent`, so the cursor pipeline is covered by the unit tests instead.
+
 ## Project shape
 
 Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first. The short version:
 
-- Input enters `CursorView` (the full-screen overlay).
+- Input enters via `service.onMotionEvent` (API 34+, non-touchable overlay) or
+  `CursorView`'s capture (API 24-33, touchable overlay).
 - `DwellClicker` decides when a rest is a click; a physical button click is the
   same primary action.
 - `MouseAccessibilityService.handlePrimaryAction()` either selects a menu entry

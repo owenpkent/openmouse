@@ -35,14 +35,14 @@ Android 7.0, which is exactly why 7.0 is the floor.
 
 ```
 physical mouse
-      │  hover / motion events
+      │  motion events
       ▼
 ┌─────────────────────────────┐
-│ CursorView (overlay)        │  full-screen, draws the cross-hair,
-│  - captures pointer motion  │  hides the system pointer
-│  - reports x,y              │
+│ input capture               │  API 34+: service.onMotionEvent (overlay
+│  - reports x,y              │  non-touchable, touch passes through)
+│                             │  API 24-33: CursorView captures the mouse
 └──────────────┬──────────────┘
-               │ x,y
+               │ x,y                (CursorView draws the cross-hair + menu)
                ▼
 ┌─────────────────────────────┐
 │ DwellClicker                │  fires when the cursor rests still
