@@ -1,0 +1,4 @@
+First open-source release. Mouse cursor with dwell click and standard click; an
+on-screen gesture menu (tap, double-tap, long-press, drag, swipe, scroll, and
+navigation); scroll-wheel support; and a live settings screen. Built as an
+accessibility service. No data collected.

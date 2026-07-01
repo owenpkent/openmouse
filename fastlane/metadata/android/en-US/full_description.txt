@@ -1,0 +1,18 @@
+OpenMouse turns a physical mouse or trackball into a way to control your Android
+device, for people who find the touchscreen hard to use: tremors, limited fine
+motor control, or conditions like cerebral palsy.
+
+A large cross-hair cursor follows your mouse. Hold it still and it clicks for you
+(dwell click), or press the mouse button. An on-screen menu adds double-tap,
+long-press, drag, swipe, and scroll, plus shortcuts for Back, Home, Recent apps,
+Notifications, and Quick Settings. A settings screen lets you tune the dwell
+time, movement tolerance, cursor size and color, and menu side; changes apply
+instantly.
+
+OpenMouse is a clean-room, open-source reimplementation of the closed-source Ease
+Mouse, built as a standard Android accessibility service. It needs no root and no
+special hardware. On Android 14 and newer it observes the mouse without capturing
+your touchscreen, so finger touch keeps working normally.
+
+Private by design: OpenMouse collects no data, contains no ads or trackers, and
+never connects to the internet.

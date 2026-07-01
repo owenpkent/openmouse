@@ -31,9 +31,10 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Keystore files (do not commit signing keys)
+# Keystore files and signing secrets (do not commit)
 *.jks
 *.keystore
+keystore.properties
 
 # Logs
 *.log
