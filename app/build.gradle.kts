@@ -60,10 +60,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures {
-        viewBinding = true
-    }
-
     testOptions {
         unitTests.isReturnDefaultValues = true
     }

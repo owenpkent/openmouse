@@ -46,7 +46,10 @@ door open.
 ## What "native" changes technically
 
 - **Bundled system app** (LineageOS / OEM): mostly packaging. The accessibility
-  service already exists; as a privileged app it is pre-granted. Small change.
+  service already exists, and preinstalled it is exempt from the restricted-
+  settings block. A starting-point kit is already in the repo: the root
+  [`Android.bp`](../Android.bp) plus [`platform/`](../platform/README.md). The app
+  was made viewBinding-free specifically so Soong can build it.
 - **Framework integration**: a dwell-click / cursor feature in the input +
   accessibility stack (`frameworks/base/services/accessibility/...`). Larger, but
   the current app is a working prototype and de-facto spec for it.

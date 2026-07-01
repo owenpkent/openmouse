@@ -42,6 +42,9 @@ tagged release.
   accessibility tool (system UI and Google Play review).
 - Release builds are now minified with resource shrinking and use a conditional
   signing config (`keystore.properties`, gitignored).
+- Dropped viewBinding (activities use `findViewById`) so the same sources build
+  under the AOSP/Soong platform build. Added an `Android.bp` + `platform/`
+  packaging kit for preinstalling OpenMouse as a system app in a ROM.
 
 ### Fixed
 

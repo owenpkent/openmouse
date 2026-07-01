@@ -1,0 +1,36 @@
+// Platform (AOSP / LineageOS) build definition to preinstall OpenMouse as a
+// system app. Day-to-day development and the F-Droid build use Gradle; this file
+// is only for including the app in a ROM source tree. See platform/README.md.
+//
+// NOT yet validated in a real AOSP/LineageOS checkout -- treat it as a starting
+// point. The prebuilt module names for androidx/material and the license setup
+// can vary between tree versions.
+
+android_app {
+    name: "OpenMouse",
+
+    srcs: ["app/src/main/java/**/*.kt"],
+    resource_dirs: ["app/src/main/res"],
+
+    // Soong reads the package from the manifest; the Gradle build derives it from
+    // `namespace` instead, so the platform build uses its own manifest.
+    manifest: "platform/AndroidManifest.xml",
+
+    sdk_version: "current",
+    min_sdk_version: "24",
+
+    // Preinstall into the /product partition. A preinstalled accessibility
+    // service is exempt from the Android 13+ restricted-settings block, so the
+    // user can enable OpenMouse normally (no adb appop workaround needed).
+    product_specific: true,
+
+    static_libs: [
+        "androidx.core_core-ktx",
+        "androidx.appcompat_appcompat",
+        "com.google.android.material_material",
+    ],
+
+    optimize: {
+        proguard_flags_files: ["app/proguard-rules.pro"],
+    },
+}
