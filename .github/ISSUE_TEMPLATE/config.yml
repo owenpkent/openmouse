@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/owenpkent/openmouse/security/policy
+    about: Please report vulnerabilities privately, not as a public issue.
+  - name: Question or idea
+    url: https://github.com/owenpkent/openmouse/discussions
+    about: For open-ended questions and discussion.

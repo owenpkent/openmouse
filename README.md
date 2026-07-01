@@ -158,9 +158,13 @@ there, keeping the Android wrapper a straight pass-through.
 ## Contributing
 
 Issues and pull requests are welcome, especially from the AAC / accessibility
-community. The roadmap items above are good starting points. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding conventions, and how to add
-a new gesture.
+community. The roadmap items above are good starting points.
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, conventions, emulator testing, and
+  how to add a new gesture
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+- [SECURITY.md](SECURITY.md) — reporting a vulnerability
+- [docs/RELEASING.md](docs/RELEASING.md) — the plan for shipping to F-Droid / Play
 
 ## License
 

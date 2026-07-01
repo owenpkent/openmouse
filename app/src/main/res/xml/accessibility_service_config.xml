@@ -18,5 +18,6 @@
     android:accessibilityFlags="flagDefault"
     android:canPerformGestures="true"
     android:description="@string/accessibility_service_description"
+    android:isAccessibilityTool="true"
     android:notificationTimeout="100"
     android:settingsActivity="io.github.owenpkent.openmouse.SettingsActivity" />
