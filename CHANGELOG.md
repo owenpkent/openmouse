@@ -7,6 +7,12 @@ tagged release.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0] - 2026-06-30
+
+First public (pre-)release.
+
 ### Added
 
 - Cursor MVP: a large cross-hair that follows a USB or Bluetooth mouse /
@@ -73,3 +79,6 @@ tagged release.
   issue/PR templates, plus a privacy policy, F-Droid (fastlane) metadata, and
   distribution plans in `docs/RELEASING.md` (F-Droid / Play) and
   `docs/UPSTREAMING.md` (AOSP / LineageOS).
+
+[Unreleased]: https://github.com/owenpkent/openmouse/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/owenpkent/openmouse/releases/tag/v0.1.0

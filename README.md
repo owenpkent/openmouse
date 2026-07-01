@@ -11,11 +11,23 @@ It is a clean-room, open-source clone of the excellent (closed-source)
 the approach can be studied, forked, and improved. OpenMouse is not affiliated
 with or endorsed by Ease Apps.
 
-> **Status: working early version.** The cursor follows the mouse with dwell and
-> standard clicks, and an on-screen menu adds double-tap, long-press, drag,
-> swipe, scroll, and Back / Home / Recent. The pure logic is unit tested and the
-> app builds against the current Android toolchain. The remaining items (tremor
-> filter, pinch-to-zoom, a settings screen) are on the roadmap below.
+> **Status: v0.1.0, an early release.** The cursor follows the mouse with dwell
+> and standard clicks; an on-screen menu adds double-tap, long-press, drag,
+> swipe, scroll, and Back / Home / Recent / Notifications / Quick Settings; and a
+> live settings screen tunes it. The logic is unit tested and the app is verified
+> on an emulator. Remaining roadmap items (tremor filter, pinch-to-zoom) are
+> below.
+
+## Install
+
+- **Direct APK:** download the latest `openmouse-*.apk` from the
+  [Releases](https://github.com/owenpkent/openmouse/releases) page and sideload it
+  (Android 7.0+).
+- **F-Droid** and **Google Play**: planned; the metadata and submission guides are
+  ready (see [docs/RELEASING.md](docs/RELEASING.md)).
+
+Then open OpenMouse, enable **OpenMouse cursor** in Accessibility settings, and
+plug in a mouse (details under [Enabling](#enabling-openmouse-on-a-device)).
 
 ## Why "integrated directly into Android"
 
