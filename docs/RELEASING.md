@@ -32,6 +32,9 @@ must make that unmistakable:
 - Do **not** add any feature that reads screen content for non-accessibility
   reasons; the config already drops `canRetrieveWindowContent`.
 
+Full Play Console steps, the exact permissions-declaration text, and the Data
+Safety answers are in [`docs/play/`](play/README.md).
+
 ## Pre-ship checklist
 
 - [ ] **Signing**: create a release keystore (keep it safe and backed up) or use
