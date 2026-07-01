@@ -55,6 +55,8 @@ must make that unmistakable:
 2. Play: roll through **internal → closed → open** testing tracks before
    production. Recruit real testers (see below) on the closed track.
 3. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
+   The ready-to-submit metadata and step-by-step notes are in
+   [`docs/fdroid/`](fdroid/README.md).
 
 ## After launch
 

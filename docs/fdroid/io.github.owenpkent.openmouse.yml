@@ -1,0 +1,33 @@
+# F-Droid metadata for OpenMouse.
+#
+# This is the file to submit to https://gitlab.com/fdroid/fdroiddata as
+# metadata/io.github.owenpkent.openmouse.yml (via a merge request). F-Droid
+# builds from source and signs with its own key, so the app's own signing is not
+# used for the F-Droid build. The store listing text and screenshots are picked
+# up automatically from fastlane/metadata/android/en-US in this repo.
+
+Categories:
+  - Accessibility
+License: MIT
+AuthorName: Owen Kent
+AuthorEmail: Owenpkent@gmail.com
+WebSite: https://github.com/owenpkent/openmouse
+SourceCode: https://github.com/owenpkent/openmouse
+IssueTracker: https://github.com/owenpkent/openmouse/issues
+Changelog: https://github.com/owenpkent/openmouse/blob/HEAD/CHANGELOG.md
+
+RepoType: git
+Repo: https://github.com/owenpkent/openmouse.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1
