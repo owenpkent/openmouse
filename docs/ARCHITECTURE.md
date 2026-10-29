@@ -67,7 +67,11 @@ edges, each guarded:
    click-through (`FLAG_NOT_TOUCHABLE`) for the duration of each injected gesture,
    then restores it. This is **ref-counted** (overlapping gestures cannot restore
    touchability early) with a **watchdog** (a dropped gesture callback cannot
-   leave the overlay stuck non-touchable and freeze the cursor).
+   leave the overlay stuck non-touchable and freeze the cursor). The bookkeeping
+   is the pure `PassthroughGate`: the watchdog deadline belongs to the *oldest*
+   outstanding gesture and later gestures never push it out, so a repeating
+   scroll (one notch per dwell period) cannot keep postponing recovery after a
+   lost callback.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
    again, then samples periodically to detect a returning mouse and re-arm. So
@@ -106,12 +110,16 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   once. Leaving a cell for the app locks and the ordinary distance applies from
   the rest point, so a slip into the gap between cells, or a menu that re-lays
   out under a still pointer (the strip shifts on short screens), never taps the
-  app. After a menu choice the service re-feeds the entry now under the pointer
-  before locking, for the same reason. This is the PowerToys toolbar rule ("an
+  app. After a menu choice, a dock change, or a resize (`CursorView` reports
+  every re-layout), the service re-feeds the entry now under the pointer before
+  locking, for the same reason. This is the PowerToys toolbar rule ("an
   activated button will not fire again until the pointer leaves it").
 - **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
   not on the menu, so a user who cannot click can still reach Resume. It locks in
-  both directions, so time spent paused never counts toward a countdown.
+  both directions, so time spent paused never counts toward a countdown. The
+  service also refuses a dwell that reaches `handlePrimaryAction` over the app
+  while paused, so a rest key that went stale between pointer events can never
+  tap the app; physical clicks are unaffected.
 - **Scroll repeats in place.** After a scroll dwell the service re-arms the
   machine at the same anchor instead of waiting for movement, so another notch
   lands each dwell period while the pointer keeps resting. Moving away re-anchors
@@ -144,6 +152,8 @@ handlePrimaryAction(x, y, fromDwell):
         (any menu choice also cancels a half-started two-point gesture)
         lock the dwell machine with the ordinary tolerance; the entry cannot
         re-fire anyway until the cursor leaves it (it is the rest key)
+    else if fromDwell and paused:
+        re-anchor and lock; nothing reaches the app
     else:
         run the currentMode gesture at (x, y) via dispatchGesture
         reset non-tap modes back to TAP (one-shot)
@@ -158,11 +168,15 @@ double-tap, long-press, drag, swipe, scroll) goes through `runGesture`, which
 dispatches directly on the modern path and does the legacy passthrough dance on
 API 24-33.
 
-The strip is laid out by the pure `MenuGeometry`: a two-column grid whose toggle
-is anchored at its collapsed center (so it does not jump when the grid expands)
-and clamped to stay on screen on short/landscape displays. While collapsed, only
-the toggle is a hit target, so the rest of the screen clicks through; the
-left/right dock setting moves it off a busy edge.
+The strip is laid out by the pure `MenuGeometry`: a grid whose toggle is
+anchored at its collapsed center (so it does not jump when the grid expands)
+and clamped to stay on screen on short/landscape displays. The grid is two
+columns wide on a tall screen; when the expanded strip would still run off a
+short one (a phone in landscape) it widens a column at a time until it fits or
+the screen width runs out, so the last row, Pause / Resume, stays reachable
+however the device is held. While collapsed, only the toggle is a hit target,
+so the rest of the screen clicks through; the left/right dock setting moves it
+off a busy edge.
 
 ### One-shot vs sticky modes
 

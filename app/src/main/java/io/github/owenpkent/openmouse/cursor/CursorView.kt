@@ -38,6 +38,14 @@ class CursorView(context: Context) : View(context) {
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
 
+    /**
+     * Called after the menu has been laid out for a new view size (rotation, a
+     * folding screen), which moves the menu under a pointer that has not sent
+     * an event; the service re-anchors the dwell machine on what is under the
+     * cursor now.
+     */
+    var onLayoutChanged: (() -> Unit)? = null
+
     private var cursorX = -1f
     private var cursorY = -1f
     private var countdown = 0f // 0 = idle, approaches 1 just before a click
@@ -147,6 +155,7 @@ class CursorView(context: Context) : View(context) {
             cursorX = w / 2f
             cursorY = h / 2f
         }
+        onLayoutChanged?.invoke()
     }
 
     override fun onDraw(canvas: Canvas) {

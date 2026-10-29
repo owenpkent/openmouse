@@ -81,7 +81,8 @@ two input-capture paths and how injected gestures reach the app below.
   countdown for feedback
 - Standard click: a physical left-button press taps immediately
 - Scroll wheel scrolls the content under the cursor
-- On-screen gesture menu (collapsible, two-column grid, left or right edge)
+- On-screen gesture menu (collapsible grid, left or right edge, widens on short
+  screens so every entry stays reachable)
 - Tap modes: single tap, double-tap, long-press
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor

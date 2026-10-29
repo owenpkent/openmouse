@@ -11,7 +11,9 @@ tagged release.
 
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
-  a physical button.
+  a physical button. The menu grid widens on a short screen (a phone in
+  landscape) so its last row, Pause / Resume included, is never pushed off
+  the bottom.
 - A separate "re-arm distance after a click" setting: how far the pointer must
   travel after a dwell click before the next countdown may start, so a shaky
   hand cannot click the same spot twice (the movement tolerance is unchanged).
@@ -32,8 +34,16 @@ tagged release.
   menu toggle every dwell period; the cell is now the tolerance, and an entry
   re-arms only after the pointer leaves it. Leaving a cell for the app (or the
   gap between cells) locks until the ordinary movement tolerance is cleared, and
-  the service re-anchors on the entry under the pointer after a menu choice, so
-  a menu strip that shifts on a short screen cannot tap the app.
+  the service re-anchors on the entry under the pointer after a menu choice, a
+  dock change, or a resize, so a menu strip that shifts on a short screen or
+  moves on rotation cannot tap the app. While paused, a dwell that reaches the
+  dispatch point over the app is refused outright, whatever the machine's rest
+  key says.
+- On API 24-33 the touch-passthrough watchdog is now armed for the oldest
+  in-flight gesture and left alone by later ones. A repeating scroll used to
+  re-arm it on every notch, so one lost gesture callback could leave the
+  overlay click-through (and the cursor unable to see the mouse) for as long
+  as the pointer rested. The bookkeeping is a pure, fuzzed `PassthroughGate`.
 - A right or middle mouse button press now locks the dwell machine like a left
   press does, on both input paths. On API 34+ a left click is detected from the
   button that changed rather than every button currently held.

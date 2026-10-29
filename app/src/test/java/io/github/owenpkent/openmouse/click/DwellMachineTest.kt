@@ -447,6 +447,28 @@ class DwellMachineTest {
             m.onMove(500f, 500f, 400L)
             assertFalse(m.poll(1000L).clicked)
         }
+
+        @Test
+        fun aMenuThatMovesAwayDuringAPausedCountdownDoesNotTapTheApp() {
+            // Paused, resting on a menu entry mid-countdown, the screen rotates
+            // and the menu re-lays out elsewhere. The service re-feeds the same
+            // point with the entry now under it (nothing): the machine must
+            // lock rather than let the entry's countdown fire against the app.
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            m.onMove(300f, 300f, 200L, restKey = "toggle")
+            assertEquals(0.5f, m.poll(250L).progress, EPS)
+
+            m.onMove(300f, 300f, 250L, restKey = null) // the resync after the resize
+            assertFalse(m.poll(300L).clicked)
+            assertFalse(m.poll(5000L).clicked)
+            assertEquals(0f, m.poll(5000L).progress, EPS)
+
+            // Even moving over the app does not fire while paused.
+            m.onMove(600f, 600f, 5000L)
+            assertFalse(m.poll(6000L).clicked)
+        }
     }
 
     @Nested

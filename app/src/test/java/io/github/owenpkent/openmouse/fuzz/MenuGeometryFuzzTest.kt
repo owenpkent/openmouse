@@ -21,7 +21,8 @@ import kotlin.math.abs
  *   toggle contains the point, an item index means that item contains it and
  *   the menu is expanded, and null means neither the toggle nor any visible
  *   item contains it;
- * - the toggle spans exactly the panel width.
+ * - the toggle spans exactly the panel width;
+ * - the column count stays between the preferred count and the entry count.
  *
  * Without `JAZZER_FUZZ=1` this only replays the seed corpus as a JUnit test.
  */
@@ -37,15 +38,21 @@ class MenuGeometryFuzzTest {
             itemH = data.consumeFloat(),
             gap = data.consumeFloat(),
             margin = data.consumeFloat(),
-            columns = columns,
+            minColumns = columns,
         )
         val visibleItems = itemCount.coerceAtLeast(0)
+        val minColumns = columns.coerceAtLeast(1)
 
         val layouts = data.consumeInt(1, 32)
         repeat(layouts) {
             val expanded = data.consumeBoolean()
             val dockRight = data.consumeBoolean()
             g.layout(data.consumeInt(), data.consumeInt(), expanded, dockRight)
+
+            // The grid widens on a short screen but never below the preferred
+            // count, and never past one entry per column.
+            assertTrue(g.columns >= minColumns, "fewer than the minimum columns: ${g.columns}")
+            assertTrue(g.columns <= maxOf(minColumns, visibleItems), "more columns than entries: ${g.columns}")
 
             val toggle = g.toggle
             val toggleWidth = toggle.right - toggle.left

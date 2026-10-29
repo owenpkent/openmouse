@@ -30,7 +30,8 @@ enum class GestureAction {
 
 /**
  * The on-screen gesture menu: a right-edge strip with a hamburger toggle and,
- * when expanded, a two-column grid of actions.
+ * when expanded, a grid of actions (two columns, wider on a short screen so the
+ * whole grid stays reachable).
  *
  * It is not a real View hierarchy. The full-screen CursorView owns all pointer
  * input, so the menu is drawn by that view and hit-tested against the cursor
@@ -81,7 +82,7 @@ class GestureMenu(context: Context) {
         itemH = itemH,
         gap = 6f * d,
         margin = 8f * d,
-        columns = 2,
+        minColumns = 2,
     )
 
     private var lastWidth = 0
