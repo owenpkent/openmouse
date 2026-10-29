@@ -83,6 +83,17 @@ two input-capture paths and how injected gestures reach the app below.
 - Scroll wheel scrolls the content under the cursor
 - On-screen gesture menu (collapsible grid, left or right edge, widens on short
   screens so every entry stays reachable)
+
+<p>
+  <img src="docs/media/dwell-demo-portrait.gif" width="270" alt="Dwell clicking on an emulator: the menu opens by dwell, Pause stops clicks on the app, Resume brings them back, and a dwell launches Photos">
+  <img src="docs/media/dwell-demo-landscape.gif" width="540" alt="In landscape the menu widens to three columns so Pause stays on screen">
+</p>
+
+Recorded on a headless emulator driven by a virtual mouse (see
+[`tools/uimouse/`](tools/uimouse/README.md)): the menu opens by dwell, Pause
+stops clicks on the app while the menu keeps working, Resume brings them back,
+and a dwell launches an app. In landscape the grid widens so Pause stays on
+screen.
 - Tap modes: single tap, double-tap, long-press
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
