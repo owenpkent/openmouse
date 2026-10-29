@@ -105,6 +105,21 @@ class PassthroughGateTest {
         }
 
         @Test
+        fun aCompletionOnAnEmptyGateReportsClosed() {
+            // end() answers "is anything still in flight?", not "did this call
+            // empty the gate?": a fresh gate, or one just reset, is closed too.
+            val g = gate()
+            assertTrue(g.end())
+            assertEquals(0, g.inFlight)
+            assertNull(g.deadlineMs)
+
+            g.begin(0L)
+            g.reset()
+            assertTrue(g.end())
+            assertEquals(0, g.inFlight)
+        }
+
+        @Test
         fun expireWithNothingInFlightIsANoOp() {
             val g = gate()
             assertFalse(g.expire(5000L))

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
  * - the deadline never moves while the count stays above zero, so repeats
  *   cannot postpone recovery from a lost completion;
  * - begin opens the gate exactly when the count was zero, end closes it
- *   exactly when the count reaches zero;
+ *   exactly when the count is zero afterwards (an empty gate included);
  * - expire at or past the deadline always empties the gate.
  *
  * Without `JAZZER_FUZZ=1` this only replays the seed corpus as a JUnit test.
@@ -39,8 +39,12 @@ class PassthroughGateFuzzTest {
                 }
 
                 1 -> {
+                    // end() reports "nothing in flight" rather than a transition,
+                    // so a completion on an empty gate (after expiry or reset)
+                    // also returns true; the service restoring an already
+                    // touchable overlay is harmless.
                     val closed = gate.end()
-                    assertEquals(before > 0 && gate.inFlight == 0, closed, "end must close iff count hit 0")
+                    assertEquals(gate.inFlight == 0, closed, "end must close iff count is 0")
                 }
 
                 2 -> {
