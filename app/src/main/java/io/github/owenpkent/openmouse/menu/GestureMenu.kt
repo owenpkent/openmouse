@@ -9,16 +9,23 @@ import io.github.owenpkent.openmouse.R
 
 /**
  * Everything the menu can do. TAP / DOUBLE_TAP / LONG_PRESS / DRAG / SWIPE /
- * SCROLL_UP / SCROLL_DOWN are selectable tap modes; BACK / HOME / RECENTS fire
- * immediately; TOGGLE expands or collapses the strip.
+ * SCROLL_UP / SCROLL_DOWN are selectable tap modes; BACK / HOME / RECENTS /
+ * NOTIFICATIONS / QUICK_SETTINGS fire immediately; PAUSE suspends or resumes
+ * dwell clicking on the app; TOGGLE expands or collapses the strip.
  */
 enum class GestureAction {
     TAP, DOUBLE_TAP, LONG_PRESS, DRAG, SWIPE, SCROLL_UP, SCROLL_DOWN,
-    BACK, HOME, RECENTS, NOTIFICATIONS, QUICK_SETTINGS, TOGGLE,
+    BACK, HOME, RECENTS, NOTIFICATIONS, QUICK_SETTINGS, PAUSE, TOGGLE,
     ;
 
     /** Two-point gestures need a start point and an end point. */
     val isTwoPoint: Boolean get() = this == DRAG || this == SWIPE
+
+    /**
+     * Modes that repeat while the pointer keeps resting (one scroll notch per
+     * dwell period), rather than locking until it moves.
+     */
+    val isRepeating: Boolean get() = this == SCROLL_UP || this == SCROLL_DOWN
 }
 
 /**
@@ -43,6 +50,9 @@ class GestureMenu(context: Context) {
     /** The active tap mode, always one of the selectable modes (never a nav action). */
     var currentMode = GestureAction.TAP
 
+    /** Whether dwell clicking is paused; the Pause entry reads "Resume" and highlights. */
+    var paused = false
+
     private class Item(val action: GestureAction, val label: String)
 
     private val items = listOf(
@@ -58,7 +68,9 @@ class GestureMenu(context: Context) {
         Item(GestureAction.RECENTS, context.getString(R.string.menu_recents)),
         Item(GestureAction.NOTIFICATIONS, context.getString(R.string.menu_notifications)),
         Item(GestureAction.QUICK_SETTINGS, context.getString(R.string.menu_quick_settings)),
+        Item(GestureAction.PAUSE, context.getString(R.string.menu_pause)),
     )
+    private val resumeLabel = context.getString(R.string.menu_resume)
 
     private val d = context.resources.displayMetrics.density
     private val itemH = 52f * d
@@ -124,7 +136,9 @@ class GestureMenu(context: Context) {
         drawCell(canvas, geometry.toggle, GestureAction.TOGGLE, label = null, cursorX, cursorY)
         if (expanded) {
             for (i in items.indices) {
-                drawCell(canvas, geometry.item(i), items[i].action, items[i].label, cursorX, cursorY)
+                val item = items[i]
+                val label = if (item.action == GestureAction.PAUSE && paused) resumeLabel else item.label
+                drawCell(canvas, geometry.item(i), item.action, label, cursorX, cursorY)
             }
         }
     }
@@ -138,8 +152,8 @@ class GestureMenu(context: Context) {
         cursorY: Float,
     ) {
         tmp.set(b.left, b.top, b.right, b.bottom)
-        val base = if (action == currentMode) selectedPaint else bgPaint
-        canvas.drawRoundRect(tmp, radius, radius, base)
+        val selected = action == currentMode || (action == GestureAction.PAUSE && paused)
+        canvas.drawRoundRect(tmp, radius, radius, if (selected) selectedPaint else bgPaint)
         if (b.contains(cursorX, cursorY)) canvas.drawRoundRect(tmp, radius, radius, hoverPaint)
 
         if (action == GestureAction.TOGGLE) {

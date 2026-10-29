@@ -8,78 +8,184 @@ import kotlin.math.hypot
  * on every interaction; [DwellClicker] is the thin Android wrapper that feeds it
  * `SystemClock.uptimeMillis()` on a timer.
  *
- * Rules:
- * - It starts locked, so nothing clicks before the pointer has moved.
- * - Moving past [moveThresholdPx] re-anchors, restarts the countdown, and unlocks.
- * - When the countdown fills it reports a click once, then locks again until the
- *   next move past the threshold.
+ * Dwell clicking's dominant failure is the "Midas touch" problem: the machine
+ * cannot tell a pointer being rested from one being aimed, so it fires clicks the
+ * user never intended. Every rule below is biased toward refusing to fire when
+ * intent is unclear (the same bias as the PowerToys Dwell Click engine, whose
+ * rules these mirror):
+ *
+ * - It starts **locked**, and re-locks after every click, after a physical click
+ *   ([lockUntilMove]), on pause, after a live settings change, and on [reset].
+ *   A lock is cleared only by deliberate pointer movement; no amount of elapsed
+ *   time will.
+ * - **Two tolerances.** [moveThresholdPx] is the jitter a running countdown
+ *   survives; drift within it leaves the countdown untouched, which is what lets
+ *   a hand with a tremor complete a dwell at all. [postActionThresholdPx] is how
+ *   far the pointer must travel after a click before a new countdown may start,
+ *   kept separate so it can be widened without making dwelling harder. Only the
+ *   lock a click leaves behind uses it; every other lock uses the ordinary
+ *   tolerance.
+ * - **Rest keys.** [onMove] takes an optional key naming the target under the
+ *   pointer (the service passes the menu cell, or null over the app). While the
+ *   key is unchanged the target itself is the tolerance: jitter inside a menu
+ *   cell never restarts or re-arms, however large, and only leaving the cell
+ *   does. Entering a cell starts its countdown at once. This is what stops a
+ *   parked pointer from firing the same menu entry every dwell period.
+ * - **Pause** ([setPaused]) suspends dwelling on the app but not on the menu
+ *   (any rest with a non-null key), so a user who cannot click can still reach
+ *   the resume entry. It locks in both directions.
+ * - **Repeat in place** ([rearmInPlace]) restarts the countdown at the same
+ *   anchor without requiring movement, for actions that are modes rather than
+ *   one-shots (scrolling): one notch per dwell period for as long as the pointer
+ *   keeps resting.
  *
  * The machine stays defined for any input rather than trusting its caller: a
- * dwell time below 1 ms is treated as 1 ms, a negative (or NaN) threshold as 0,
- * and a timestamp older than the rest anchor as zero elapsed time. The fuzz
- * target in `app/src/test/.../fuzz` drives it with arbitrary values to keep that
- * true.
+ * dwell time below 1 ms reads as 1 ms, a negative (or NaN) threshold as 0, a
+ * timestamp older than the rest anchor as zero elapsed time, and an elapsed
+ * time too large for a Long saturates. The fuzz target in
+ * `app/src/test/.../fuzz` drives it with arbitrary values to keep that true.
  */
 class DwellMachine(
     dwellTimeMs: Long = DEFAULT_DWELL_MS,
     moveThresholdPx: Float = DEFAULT_MOVE_THRESHOLD_PX,
+    postActionThresholdPx: Float = moveThresholdPx,
 ) {
     private var dwellTimeMs = clampDwell(dwellTimeMs)
     private var moveThresholdPx = clampThreshold(moveThresholdPx)
+    private var postActionThresholdPx = clampThreshold(postActionThresholdPx)
 
-    /** Update the timing live (e.g. from a settings change). */
-    fun configure(dwellTimeMs: Long, moveThresholdPx: Float) {
+    /**
+     * Update the settings live. The caller should [lockUntilMove] afterwards (as
+     * [DwellClicker] does) so a shorter dwell time cannot fire against rest that
+     * was already banked under the old one.
+     */
+    fun configure(
+        dwellTimeMs: Long,
+        moveThresholdPx: Float,
+        postActionThresholdPx: Float = moveThresholdPx,
+    ) {
         this.dwellTimeMs = clampDwell(dwellTimeMs)
         this.moveThresholdPx = clampThreshold(moveThresholdPx)
+        this.postActionThresholdPx = clampThreshold(postActionThresholdPx)
     }
 
+    // The position (and target key) the countdown is measured from, and the
+    // latest reported ones. They are separate so drift within the tolerance
+    // still updates the click point without disturbing the countdown.
     private var anchorX = 0f
     private var anchorY = 0f
+    private var anchorKey: Any? = null
     private var currentX = 0f
     private var currentY = 0f
+    private var currentKey: Any? = null
     private var restStart = 0L
+
     private var locked = true
+    private var lockedAfterAction = false
+    private var paused = false
 
     /** A snapshot of the machine at a point in time. */
     data class Poll(val progress: Float, val clicked: Boolean, val x: Float, val y: Float)
 
-    /** Re-arm the timer baseline (called when the engine (re)starts). */
+    val isPaused: Boolean get() = paused
+
+    /**
+     * Clear transient state and lock. Called when the engine (re)starts, so a
+     * pointer left resting across a stop/start cycle cannot fire the instant the
+     * machine comes back.
+     */
     fun reset(nowMs: Long) {
-        locked = true
-        anchorX = currentX
-        anchorY = currentY
+        lockUntilMove()
         restStart = nowMs
     }
 
-    /** Feed a new pointer position. */
-    fun onMove(x: Float, y: Float, nowMs: Long) {
+    /**
+     * Feed a new pointer position, with [restKey] naming the target under it
+     * (null for "nothing in particular", such as the app below the cursor).
+     * Never fires anything itself; it only decides whether the pointer has moved
+     * enough to re-arm a locked machine or to restart a running countdown.
+     */
+    fun onMove(x: Float, y: Float, nowMs: Long, restKey: Any? = null) {
         currentX = x
         currentY = y
-        // Strictly greater: a move of exactly the threshold still counts as resting,
-        // so the boundary belongs to the countdown rather than cancelling it.
-        val moved = hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > moveThresholdPx
-        if (moved) {
-            anchorX = x
-            anchorY = y
-            restStart = nowMs
-            locked = false
-        }
+        currentKey = restKey
+
+        val keyChanged = restKey != anchorKey
+        // Inside the same keyed target the target is the tolerance: no distance
+        // check at all, so a tremor within a menu cell can neither cancel its
+        // countdown nor re-fire an entry the pointer never left.
+        val insideSameTarget = restKey != null && !keyChanged
+
+        // A post-action lock uses the wider re-arm distance; every other lock
+        // (startup, settings change, physical click, pause) and a running
+        // countdown use the ordinary tolerance. Strictly greater: a move of
+        // exactly the threshold still counts as resting.
+        val threshold = if (locked && lockedAfterAction) postActionThresholdPx else moveThresholdPx
+        val moved = !insideSameTarget &&
+            hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > threshold
+
+        if (moved || keyChanged) startCountdown(x, y, restKey, nowMs)
     }
 
-    /** Lock at the current position, as if a click had just happened. */
+    /**
+     * Lock at the current position with the ordinary tolerance: a physical click,
+     * a menu choice, a settings change. The next move past [moveThresholdPx]
+     * (or into a different target) re-arms it.
+     */
     fun lockUntilMove() {
         locked = true
+        lockedAfterAction = false
         anchorX = currentX
         anchorY = currentY
+        anchorKey = currentKey
+    }
+
+    /**
+     * Lock at the current position with the wider post-action distance. [poll]
+     * applies this itself when a dwell fires; it is public for callers that
+     * perform an action from a dwell by another route.
+     */
+    fun lockAfterAction() {
+        locked = true
+        lockedAfterAction = true
+        anchorX = currentX
+        anchorY = currentY
+        anchorKey = currentKey
+    }
+
+    /**
+     * Restart the countdown at the same anchor without requiring movement, for
+     * repeating actions (scroll): the next dwell period fires again if the
+     * pointer keeps resting. Movement re-anchors as usual.
+     */
+    fun rearmInPlace(nowMs: Long) {
+        restStart = nowMs
+        locked = false
+        lockedAfterAction = false
+    }
+
+    /**
+     * Suspend dwelling on the app without losing settings. Rests on a keyed
+     * target (the menu) still fire, so the user can reach the resume entry.
+     * Locks in both directions: entering pause abandons the running countdown,
+     * and leaving it must not resume against time that elapsed while away.
+     */
+    fun setPaused(value: Boolean) {
+        if (value == paused) return
+        paused = value
+        lockUntilMove()
     }
 
     /**
      * Evaluate the machine at [nowMs]. If the returned [Poll.clicked] is true the
-     * machine has already locked itself, so the same rest will not click twice.
-     * The firing poll reports zero progress so the countdown ring clears.
+     * machine has already locked itself (with the post-action distance), so the
+     * same rest will not click twice. The firing poll reports zero progress so
+     * the countdown ring clears.
      */
     fun poll(nowMs: Long): Poll {
         if (locked) return Poll(0f, false, currentX, currentY)
+        // Paused: only a keyed target (a menu cell) may still complete a dwell.
+        if (paused && anchorKey == null) return Poll(0f, false, currentX, currentY)
         // A timestamp older than the anchor counts as no elapsed time, and a
         // difference too large for a Long saturates instead of wrapping negative
         // (the fuzz target drives both). The clamp on the divisor keeps progress
@@ -87,10 +193,19 @@ class DwellMachine(
         val elapsed = elapsedSince(restStart, nowMs)
         val progress = (elapsed.toFloat() / dwellTimeMs).coerceIn(0f, 1f)
         if (progress >= 1f) {
-            locked = true
+            lockAfterAction()
             return Poll(0f, clicked = true, x = currentX, y = currentY)
         }
         return Poll(progress, clicked = false, x = currentX, y = currentY)
+    }
+
+    private fun startCountdown(x: Float, y: Float, key: Any?, nowMs: Long) {
+        anchorX = x
+        anchorY = y
+        anchorKey = key
+        restStart = nowMs
+        locked = false
+        lockedAfterAction = false
     }
 
     companion object {

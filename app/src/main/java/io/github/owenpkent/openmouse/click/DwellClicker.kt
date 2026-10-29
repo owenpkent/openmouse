@@ -47,22 +47,44 @@ class DwellClicker(
 
     /**
      * Lock at the current position so a resting mouse does not immediately
-     * dwell-click again (e.g. right after a physical-button click). The next
-     * move past the threshold unlocks it.
+     * dwell-click again (e.g. right after a physical-button click or a menu
+     * choice). The next move past the threshold, or into a different target,
+     * unlocks it.
      */
     fun lockUntilMove() {
         machine.lockUntilMove()
         onProgress(0f)
     }
 
-    /** Feed a new cursor position in screen coordinates. */
-    fun onCursorMoved(x: Float, y: Float) {
-        machine.onMove(x, y, SystemClock.uptimeMillis())
+    /**
+     * Restart the countdown where the pointer already rests, for repeating
+     * actions (scroll). Called right after such an action fires, so another
+     * one lands each dwell period while the pointer stays put.
+     */
+    fun rearmInPlace() {
+        machine.rearmInPlace(SystemClock.uptimeMillis())
+    }
+
+    /** Pause or resume dwelling on the app. The menu keeps working while paused. */
+    fun setPaused(paused: Boolean) {
+        machine.setPaused(paused)
+        onProgress(0f)
+    }
+
+    val isPaused: Boolean get() = machine.isPaused
+
+    /**
+     * Feed a new cursor position in screen coordinates. [restKey] names the
+     * target under the cursor (the menu entry, or null over the app); see
+     * [DwellMachine.onMove].
+     */
+    fun onCursorMoved(x: Float, y: Float, restKey: Any? = null) {
+        machine.onMove(x, y, SystemClock.uptimeMillis(), restKey)
     }
 
     /** Update dwell timing live (from a settings change). */
-    fun configure(dwellTimeMs: Long, moveThresholdPx: Float) {
-        machine.configure(dwellTimeMs, moveThresholdPx)
+    fun configure(dwellTimeMs: Long, moveThresholdPx: Float, postActionThresholdPx: Float) {
+        machine.configure(dwellTimeMs, moveThresholdPx, postActionThresholdPx)
         // Re-baseline so lowering the dwell time mid-rest can't fire an instant
         // click; the next move past the threshold re-arms it.
         machine.lockUntilMove()

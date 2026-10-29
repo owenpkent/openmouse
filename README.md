@@ -86,8 +86,14 @@ two input-capture paths and how injected gestures reach the app below.
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
 - Navigation from the menu: Back, Home, Recent, Notifications, Quick Settings
-- Settings screen (applied live): dwell time, movement tolerance, cursor size,
-  cursor color, menu side, and a dwell-click on/off toggle
+- Menu entries never re-fire while the pointer sits on them: a tremor inside a
+  cell does not restart or repeat it, only leaving and coming back does
+- Pause / Resume from the menu: stops dwell clicking on the app while the menu
+  (and physical clicks) keep working
+- Scroll modes repeat while the pointer rests: one notch per dwell period
+- Settings screen (applied live): dwell time, movement tolerance, re-arm distance
+  after a click, cursor size, cursor color, menu side, and a dwell-click on/off
+  toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
 

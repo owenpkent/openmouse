@@ -9,6 +9,14 @@ tagged release.
 
 ### Added
 
+- Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
+  the app; the menu keeps working by dwell, so Resume stays reachable without
+  a physical button.
+- A separate "re-arm distance after a click" setting: how far the pointer must
+  travel after a dwell click before the next countdown may start, so a shaky
+  hand cannot click the same spot twice (the movement tolerance is unchanged).
+- Scroll up / down repeat while the pointer rests: one notch per dwell period,
+  instead of needing a fresh move between notches.
 - Jazzer fuzz targets for the pure `DwellMachine` and `MenuGeometry` cores,
   mirroring the PowerToys Dwell Click fuzz target, plus a nightly GitHub Actions
   fuzz workflow and a CI workflow (build, unit tests, lint).
@@ -18,6 +26,13 @@ tagged release.
 
 ### Fixed
 
+- Menu entries no longer re-fire while the pointer stays on them. A tremor
+  inside a cell used to restart the countdown and could trigger Back or the
+  menu toggle every dwell period; the cell is now the tolerance, and an entry
+  re-arms only after the pointer leaves it.
+- A right or middle mouse button press now locks the dwell machine like a left
+  press does, and a left click is detected from the button that changed rather
+  than every button currently held.
 - `DwellMachine` stays defined for degenerate input: negative or NaN movement
   thresholds clamp to 0, a dwell time below 1 ms reads as 1 ms, and an elapsed
   time that overflows a Long saturates instead of wrapping (found by fuzzing).

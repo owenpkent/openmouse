@@ -12,9 +12,11 @@ import org.junit.jupiter.api.Test
  *
  * The groups mirror the PowerToys Dwell Click engine suite (EngineTests.cpp) so
  * the two implementations can be compared rule for rule. PowerToys cases that
- * cover features OpenMouse does not have (a separate post-action tolerance,
- * selectable actions with revert, press-and-release drag, pause, external button
- * holds, auto-repeating scroll, injection failure) have no counterpart here.
+ * cover features OpenMouse does not have (selectable actions with revert,
+ * press-and-release drag, external button holds, injection failure) have no
+ * counterpart here. The menu-cell behaviour the PowerToys toolbar model tests
+ * (jitter within a button never resets, leave to re-arm) is covered by the
+ * rest-key group.
  */
 class DwellMachineTest {
 
@@ -263,6 +265,253 @@ class DwellMachineTest {
             m.reset(50L)
             m.onMove(110f, 100f, 60L) // 5 px from where reset saw the pointer
             assertFalse(m.poll(1000L).clicked)
+        }
+    }
+
+    @Nested
+    inner class PostActionTolerance {
+
+        private fun machine(post: Float) =
+            DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, postActionThresholdPx = post)
+
+        @Test
+        fun postActionToleranceIsSeparateFromTheDwellTolerance() {
+            val m = machine(post = 50f) // deliberately wider than the dwell tolerance
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+
+            // 20 px clears the dwell tolerance but not the re-arm distance, so the
+            // machine stays locked. This is the setting that keeps a shaky hand
+            // from double-firing in place.
+            m.onMove(120f, 100f, 110L)
+            assertFalse(m.poll(300L).clicked)
+
+            // 100 px clears the re-arm distance and starts a fresh countdown.
+            m.onMove(200f, 100f, 400L)
+            assertFalse(m.poll(450L).clicked) // countdown restarted at t=400
+            assertTrue(m.poll(500L).clicked)
+        }
+
+        @Test
+        fun exactPostActionToleranceDoesNotUnlock() {
+            val m = machine(post = 50f)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+
+            m.onMove(150f, 100f, 110L) // exactly 50 px: still parked
+            assertFalse(m.poll(300L).clicked)
+
+            m.onMove(151f, 100f, 310L) // 51 px clears it
+            assertTrue(m.poll(500L).clicked)
+        }
+
+        @Test
+        fun nonActionLocksUseTheOrdinaryTolerance() {
+            val m = machine(post = 500f) // must not apply to a plain lock
+            arm(m)
+            m.lockUntilMove()
+
+            // A settings-change or physical-click lock is not a post-action lock,
+            // so 20 px is enough to re-arm.
+            m.onMove(120f, 100f, 50L)
+            assertTrue(m.poll(150L).clicked)
+        }
+
+        @Test
+        fun aRunningCountdownUsesTheOrdinaryTolerance() {
+            val m = machine(post = 500f)
+            arm(m)
+            // 20 px during a countdown is a real move: re-anchor and restart.
+            m.onMove(120f, 100f, 50L)
+            assertFalse(m.poll(100L).clicked)
+            assertTrue(m.poll(150L).clicked)
+        }
+
+        @Test
+        fun postActionDistanceDefaultsToTheMoveTolerance() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.onMove(111f, 100f, 110L) // 11 px: past the (shared) tolerance
+            assertTrue(m.poll(210L).clicked)
+        }
+    }
+
+    @Nested
+    inner class RepeatingActions {
+
+        @Test
+        fun rearmInPlaceFiresAgainWithoutMovement() {
+            // Scroll is the one mode that does not lock after firing: the caller
+            // re-arms in place and another notch lands each dwell period.
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            assertTrue(m.poll(200L).clicked)
+            m.rearmInPlace(200L)
+            assertFalse(m.poll(250L).clicked)
+            assertEquals(0.5f, m.poll(250L).progress, EPS)
+            assertTrue(m.poll(300L).clicked)
+        }
+
+        @Test
+        fun movementRestartsTheRepeatingScrollAtTheNewSpot() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+
+            // A real move restarts the countdown at the new spot rather than
+            // firing early.
+            m.onMove(300f, 300f, 150L)
+            assertFalse(m.poll(200L).clicked)
+            assertTrue(m.poll(250L).clicked)
+        }
+
+        @Test
+        fun rearmInPlaceDoesNotOverridePause() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.setPaused(true)
+            m.rearmInPlace(100L)
+            assertFalse(m.poll(1000L).clicked)
+        }
+    }
+
+    @Nested
+    inner class PauseAndSuppression {
+
+        @Test
+        fun pauseStopsFiring() {
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            assertTrue(m.isPaused)
+
+            assertFalse(m.poll(100L).clicked)
+            m.onMove(500f, 500f, 200L) // movement over the app must not fire while paused
+            assertFalse(m.poll(400L).clicked)
+            assertEquals(0f, m.poll(400L).progress, EPS)
+        }
+
+        @Test
+        fun resumingRequiresMovementBeforeFiring() {
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            m.setPaused(false)
+            assertFalse(m.isPaused)
+
+            // Time passed while paused must not count toward a countdown.
+            assertFalse(m.poll(10_000L).clicked)
+
+            m.onMove(300f, 300f, 10_000L)
+            assertTrue(m.poll(10_100L).clicked)
+        }
+
+        @Test
+        fun redundantPauseCallsAreNoOps() {
+            val m = machine()
+            arm(m)
+            m.setPaused(false) // already running: must not disturb the countdown
+            assertTrue(m.poll(100L).clicked)
+        }
+
+        @Test
+        fun pausedStillFiresOnMenuEntries() {
+            // Pause stops the app, never the menu: a rest on a keyed target (a
+            // menu entry) still completes, so the user can reach Resume.
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            m.onMove(300f, 300f, 200L, restKey = "resume")
+            assertEquals(0.5f, m.poll(250L).progress, EPS)
+            assertTrue(m.poll(300L).clicked)
+
+            // Back over the app, still paused: nothing.
+            m.onMove(500f, 500f, 400L)
+            assertFalse(m.poll(1000L).clicked)
+        }
+    }
+
+    @Nested
+    inner class RestKeys {
+
+        @Test
+        fun enteringATargetStartsItsCountdownEvenWithoutDistance() {
+            val m = machine()
+            arm(m)
+            m.lockUntilMove()
+            // 2 px, far under the tolerance, but into a different target.
+            m.onMove(102f, 100f, 50L, restKey = "back")
+            assertFalse(m.poll(100L).clicked)
+            assertTrue(m.poll(150L).clicked)
+        }
+
+        @Test
+        fun jitterWithinATargetDoesNotRestartTheCountdown() {
+            val m = machine() // 10 px tolerance
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "back")
+            // 40 px of tremor, well past the tolerance, but still inside the cell.
+            m.onMove(140f, 100f, 50L, restKey = "back")
+            m.onMove(100f, 120f, 80L, restKey = "back")
+            assertTrue(m.poll(100L).clicked)
+        }
+
+        @Test
+        fun leavingATargetRestartsTheCountdown() {
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "back")
+            m.onMove(103f, 100f, 50L, restKey = null) // 3 px, but into the gap
+            assertFalse(m.poll(100L).clicked)
+            assertTrue(m.poll(150L).clicked)
+        }
+
+        @Test
+        fun anActivatedTargetDoesNotFireAgainUntilThePointerLeavesIt() {
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "back")
+            assertTrue(m.poll(100L).clicked)
+            m.lockUntilMove() // what the service does after a menu choice
+
+            // Parked on the entry with a large tremor: must not fire again, ever.
+            m.onMove(150f, 100f, 200L, restKey = "back")
+            m.onMove(100f, 130f, 300L, restKey = "back")
+            assertFalse(m.poll(10_000L).clicked)
+
+            // Leave and come back: a fresh countdown.
+            m.onMove(100f, 160f, 10_000L, restKey = null)
+            m.onMove(100f, 130f, 10_050L, restKey = "back")
+            assertFalse(m.poll(10_100L).clicked)
+            assertTrue(m.poll(10_150L).clicked)
+        }
+
+        @Test
+        fun aPhysicalClickOnATargetAppliesTheSameLeaveToRearmRule() {
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "back")
+            m.lockUntilMove() // physical click on the entry
+            m.onMove(140f, 100f, 50L, restKey = "back")
+            assertFalse(m.poll(1000L).clicked)
+            m.onMove(140f, 100f, 1000L, restKey = "home")
+            assertTrue(m.poll(1100L).clicked)
+        }
+
+        @Test
+        fun targetsCompareByEquality() {
+            // Equal keys are the same target even when the objects differ, so
+            // callers may hand over freshly built keys on every move.
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "cell-" + 1)
+            m.onMove(140f, 100f, 50L, restKey = "cell-" + 1)
+            assertTrue(m.poll(100L).clicked)
         }
     }
 

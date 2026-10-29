@@ -96,7 +96,7 @@ class MouseAccessibilityService : AccessibilityService() {
 
         val clicker = DwellClicker(
             onProgress = { progress -> cursorView?.setCountdown(progress) },
-            onClick = { x, y -> handlePrimaryAction(x, y) },
+            onClick = { x, y -> handlePrimaryAction(x, y, fromDwell = true) },
         )
         dwellClicker = clicker
 
@@ -104,7 +104,7 @@ class MouseAccessibilityService : AccessibilityService() {
         view.gestureMenu = menu
         // Legacy capture path: CursorView reports mouse events to these.
         view.onMove = { x, y -> onPointerMoved(x, y, draw = false) }
-        view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y) }
+        view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y, fromDwell = false) }
         view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         cursorView = view
 
@@ -165,8 +165,14 @@ class MouseAccessibilityService : AccessibilityService() {
 
             MotionEvent.ACTION_BUTTON_PRESS -> {
                 onPointerMoved(x, y, draw = true)
-                if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
-                    handlePrimaryAction(x, y)
+                // actionButton is the button that changed, not the set held
+                // down, so a right press while the left is held is not a click.
+                if (event.actionButton == MotionEvent.BUTTON_PRIMARY) {
+                    handlePrimaryAction(x, y, fromDwell = false)
+                } else {
+                    // The user pressed some other button for themselves; do
+                    // not stack a dwell click on top of whatever they meant.
+                    dwellClicker?.lockUntilMove()
                 }
             }
 
@@ -181,7 +187,10 @@ class MouseAccessibilityService : AccessibilityService() {
     private fun onPointerMoved(x: Float, y: Float, draw: Boolean) {
         lastPointerMs = SystemClock.uptimeMillis()
         if (draw) cursorView?.setCursorPosition(x, y)
-        dwellClicker?.onCursorMoved(x, y)
+        // The menu entry under the cursor is the dwell machine's rest key: while
+        // the pointer stays inside one entry, that entry is the tolerance, so a
+        // tremor inside it never restarts the countdown or re-fires it.
+        dwellClicker?.onCursorMoved(x, y, restKey = gestureMenu?.hitTest(x, y))
     }
 
     /**
@@ -192,7 +201,11 @@ class MouseAccessibilityService : AccessibilityService() {
         val prefs = settings ?: return
         val density = resources.displayMetrics.density
 
-        dwellClicker?.configure(prefs.dwellTimeMs, prefs.moveThresholdDp * density)
+        dwellClicker?.configure(
+            prefs.dwellTimeMs,
+            prefs.moveThresholdDp * density,
+            prefs.postActionThresholdDp * density,
+        )
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)
         gestureMenu?.setDockRight(prefs.menuOnRight)
@@ -205,17 +218,31 @@ class MouseAccessibilityService : AccessibilityService() {
      * The single entry point for "the user clicked here", whether by dwell or by
      * pressing the physical button. If the cursor is over a menu entry, handle
      * the menu; otherwise perform the current gesture at the target.
+     *
+     * What happens to the dwell machine afterwards depends on the route:
+     * - a dwell that fired an app action has already locked itself with the
+     *   post-action distance, except a repeating mode (scroll), which re-arms in
+     *   place so another notch lands each dwell period while the pointer rests;
+     * - a menu choice or a physical click locks with the ordinary tolerance. A
+     *   menu entry cannot re-fire until the pointer leaves it anyway, because
+     *   the entry is the machine's rest key.
      */
-    private fun handlePrimaryAction(x: Float, y: Float) {
+    private fun handlePrimaryAction(x: Float, y: Float, fromDwell: Boolean) {
         val menu = gestureMenu
         val hit = menu?.hitTest(x, y)
         if (menu != null && hit != null) {
             onMenuAction(menu, hit)
-        } else {
-            performMode(menu?.currentMode ?: GestureAction.TAP, x, y)
+            dwellClicker?.lockUntilMove()
+            return
         }
-        // Don't let a resting mouse immediately fire again; require a move first.
-        dwellClicker?.lockUntilMove()
+
+        val mode = menu?.currentMode ?: GestureAction.TAP
+        performMode(mode, x, y)
+        if (fromDwell) {
+            if (mode.isRepeating) dwellClicker?.rearmInPlace()
+        } else {
+            dwellClicker?.lockUntilMove()
+        }
     }
 
     private fun onMenuAction(menu: GestureMenu, action: GestureAction) {
@@ -226,10 +253,23 @@ class MouseAccessibilityService : AccessibilityService() {
             GestureAction.NOTIFICATIONS -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.QUICK_SETTINGS -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             GestureAction.TOGGLE -> menu.toggleExpanded()
+            GestureAction.PAUSE -> setPaused(!menu.paused)
             else -> menu.currentMode = action // a selectable tap/drag/scroll mode
         }
         // Any menu choice cancels a half-started two-point gesture.
         clearPending()
+    }
+
+    /**
+     * Pause or resume dwell clicking on the app. The menu keeps dwelling while
+     * paused (the machine still fires on menu entries), which is what lets a
+     * user who cannot click reach the Resume entry. Physical clicks are not
+     * affected either way.
+     */
+    private fun setPaused(paused: Boolean) {
+        gestureMenu?.paused = paused
+        dwellClicker?.setPaused(paused)
+        cursorView?.invalidate()
     }
 
     private fun performMode(mode: GestureAction, x: Float, y: Float) {
@@ -255,7 +295,7 @@ class MouseAccessibilityService : AccessibilityService() {
             GestureAction.SCROLL_DOWN ->
                 runGesture { done -> dispatcher.scroll(x, y, revealAbove = false, done) }
 
-            else -> Unit // navigation actions never reach here
+            else -> Unit // navigation, pause and toggle never reach here
         }
     }
 

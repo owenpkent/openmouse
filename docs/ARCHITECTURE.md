@@ -82,24 +82,46 @@ drawn at the same point, so they coincide.
 
 ## The dwell state machine
 
-`DwellClicker` keeps an *anchor* (where the cursor came to rest) and a monotonic
-`restStartUptime`. A 16 ms ticker computes `progress = elapsed / dwellTime`:
+`DwellMachine` keeps an *anchor* (where the cursor came to rest, plus the menu
+entry under it, if any) and a monotonic rest start. `DwellClicker` polls it from
+a 16 ms ticker with `SystemClock.uptimeMillis()`, and the machine computes
+`progress = elapsed / dwellTime`. The rules mirror the PowerToys Dwell Click
+engine, and every one of them is biased toward refusing to fire when intent is
+unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 
-- Movement beyond `moveThresholdPx` re-anchors, restarts the timer, and unlocks.
-- When `progress` reaches 1 it fires the click and **locks**.
-- While locked, no clicks fire until the cursor moves past the threshold again.
+- It starts **locked**, and re-locks after every click, after a physical click,
+  on pause, after any live settings change, and when the ticker restarts. A lock
+  is cleared only by deliberate pointer movement; no amount of elapsed time will.
+- **Two tolerances.** The movement tolerance is the jitter a running countdown
+  survives; drift within it leaves the countdown alone, which is what lets a hand
+  with a tremor complete a dwell at all. The re-arm distance is how far the
+  pointer must travel after a dwell click before a new countdown may start. Only
+  the lock a dwell click leaves behind uses it; it is a separate setting so it
+  can be widened without making dwelling harder.
+- **Rest keys.** On every move the service hands the machine the menu entry under
+  the cursor (or null over the app). While that key is unchanged the entry itself
+  is the tolerance: a tremor inside a menu cell, however large, neither restarts
+  the countdown nor re-fires the entry. Entering a cell starts its countdown at
+  once; only leaving it re-arms. This is the PowerToys toolbar rule ("an
+  activated button will not fire again until the pointer leaves it").
+- **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
+  not on the menu, so a user who cannot click can still reach Resume. It locks in
+  both directions, so time spent paused never counts toward a countdown.
+- **Scroll repeats in place.** After a scroll dwell the service re-arms the
+  machine at the same anchor instead of waiting for movement, so another notch
+  lands each dwell period while the pointer keeps resting. Moving away re-anchors
+  as usual.
 
-It starts locked so a freshly enabled service never clicks before the user has
-moved the mouse. `SystemClock.uptimeMillis()` is used (not wall-clock) so the
-timing is immune to clock changes. Changing the dwell time live re-baselines the
-timer and re-locks, so dragging the dwell slider down cannot fire an instant
-click against already-elapsed rest.
+`SystemClock.uptimeMillis()` is used (not wall-clock) so the timing is immune to
+clock changes. Changing a setting live re-locks, so dragging the dwell slider
+down cannot fire an instant click against already-elapsed rest.
 
 ## Gesture modes and the menu
 
 A click is not always a single tap. `GestureMenu` holds a `currentMode` (tap,
 double-tap, long-press, drag, swipe, or scroll) plus navigation entries
-(Back / Home / Recent / Notifications / Quick Settings).
+(Back / Home / Recent / Notifications / Quick Settings) and a Pause / Resume
+entry.
 
 The menu is **not a real View hierarchy**. `CursorView` owns every pointer
 event, so a separate touchable button strip underneath it would never receive
@@ -108,16 +130,21 @@ hit-tests the cursor position against it. Both the dwell timer and a physical
 left-click funnel into one method:
 
 ```
-handlePrimaryAction(x, y):
+handlePrimaryAction(x, y, fromDwell):
     if cursor is over a menu entry:
         tap/drag/scroll mode -> set currentMode
         Back/Home/Recent/Notifications/QuickSettings -> performGlobalAction(...)
+        pause -> pause / resume dwell clicking on the app
         toggle -> expand / collapse the strip
         (any menu choice also cancels a half-started two-point gesture)
+        lock the dwell machine with the ordinary tolerance; the entry cannot
+        re-fire anyway until the cursor leaves it (it is the rest key)
     else:
         run the currentMode gesture at (x, y) via dispatchGesture
         reset non-tap modes back to TAP (one-shot)
-    lock the dwell clicker until the cursor moves again
+        dwell + scroll mode -> re-arm in place (repeat while resting)
+        dwell + anything else -> already locked with the re-arm distance
+        physical click -> lock with the ordinary tolerance
 ```
 
 Navigation actions use `performGlobalAction()` and need no passthrough, since they
@@ -140,7 +167,12 @@ After it runs, a mode either reverts to `TAP` (one-shot) or stays selected
 - **One-shot**: double-tap, long-press, drag, swipe. You do one, then you are
   back to tapping.
 - **Sticky**: tap, scroll-up, scroll-down. Scrolling is repeatable, so it stays
-  active and each click scrolls again.
+  active; a scroll dwell also re-arms in place, so holding still keeps
+  scrolling one notch per dwell period.
+
+The Pause entry is neither: it toggles dwell clicking on the app on and off,
+reads "Resume" while paused, and stays reachable by dwell because the machine
+keeps firing on menu entries while paused.
 
 ### Two-point gestures (drag, swipe)
 
