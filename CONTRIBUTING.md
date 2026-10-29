@@ -42,10 +42,13 @@ adb shell dumpsys window | grep -i openmouse   # overlay attached, NOT_TOUCHABLE
 adb exec-out screencap -p > shot.png           # cross-hair + menu render?
 ```
 
-This verifies the overlay, touch passthrough, rendering, and crashes. What it
-**cannot** do: drive a real mouse cursor. A headless emulator has no mouse device,
-and the accessibility framework filters `adb input`-injected events out of
-`onMotionEvent`, so the cursor pipeline is covered by the unit tests instead.
+This verifies the overlay, touch passthrough, rendering, and crashes. It does
+not drive the cursor: a headless emulator has no mouse device, and the
+accessibility framework filters `adb input`-injected events out of
+`onMotionEvent`. To exercise the real cursor pipeline (dwell, menu, pause,
+rotation) give the emulator a virtual mouse with [`tools/uimouse/`](tools/uimouse/README.md):
+a uinput device on a rooted Google APIs image, driven from the host by
+screenshots. The clips under `docs/media/` were recorded that way.
 
 ## Project shape
 
