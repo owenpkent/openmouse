@@ -68,6 +68,10 @@ class Device:
         if self._wiggler is None:
             self._wiggler = threading.Thread(target=self._wiggle_loop, daemon=True)
             self._wiggler.start()
+        # In transit from the start: the pointer only ever rests inside rest(),
+        # so a shell command or a screenshot can never leave it still long
+        # enough for a dwell to fire somewhere unintended.
+        self.transit(True)
 
     def close_mouse(self):
         self._transit.clear()
@@ -176,14 +180,17 @@ class Device:
     def goto(self, x, y, tolerance=8, tries=6):
         """
         Steer the cross-hair to (x, y) in screen pixels, correcting from
-        screenshots. The pointer is in transit (wiggled) until the final
-        position is confirmed, so the only rest that can complete a dwell is
-        the deliberate one the caller does afterwards.
+        screenshots. The pointer stays in transit (wiggled) throughout, so the
+        only rest that can complete a dwell is the deliberate rest() afterwards.
         """
         self.transit(True)
         cur = None
+        last = None
         for i in range(tries):
             cur = self.locate_cross()
+            if cur is not None and self.near_edge(cur) and i > 0 and cur == last:
+                break  # pinned against the edge: as close as it gets
+            last = cur
             if cur is None:
                 # Usually pinned in a corner, off screen: nudge toward the centre and look again.
                 self.glide(200, 200)
@@ -210,7 +217,6 @@ class Device:
                     # A pointer pinned against a screen edge moves less than
                     # asked for reasons that have nothing to do with acceleration.
                     self.gain = min(4.0, max(0.5, self.gain * 0.5 + 0.5 * moved / asked))
-        self.transit(False)
         return cur
 
     def note(self, text):
@@ -220,8 +226,21 @@ class Device:
             self.log.write(line + "\n")
             self.log.flush()
 
+    def leave_dock(self, px=700):
+        """
+        Blind glide away from the right edge. Opening the dock shifts the strip
+        on a short screen and can put a cell under the still pointer; a cell
+        under a pointer that then jitters across its edge arms at once, so get
+        clear of the whole panel before the next screenshot pause.
+        """
+        self.glide(-px / self.gain, 0)
+        time.sleep(0.2)
+
     def rest(self, seconds):
+        """The one place the pointer is allowed to be still: a deliberate dwell."""
+        self.transit(False)
         time.sleep(seconds)
+        self.transit(True)
 
     SERVICE = "io.github.owenpkent.openmouse/io.github.owenpkent.openmouse.service.MouseAccessibilityService"
 
@@ -254,8 +273,6 @@ class Device:
             if start is None or (now is not None and (abs(now[0] - start[0]) > 20 or abs(now[1] - start[1]) > 20)):
                 break
         self.note(f"settled after {time.time() - t0:.1f} s")
-        w, h = self.screen_size
-        self.goto(int(w * 0.3), int(h * 0.4))
 
     def goto_cell(self, cx, cy, panel_left):
         """
@@ -301,8 +318,12 @@ PAUSE_INDEX = 12  # the last menu entry
 DWELL = 1.0  # the default dwell time, seconds
 
 
+CELL_DP, GAP_DP, MARGIN_DP = 48, 4, 0  # GestureMenu's dock: square glyph cells flush with the edge
+HANDLE_W_DP, HANDLE_H_DP = 22, 96  # the collapsed handle
+
+
 def panel_left(width, columns, density=DENSITY):
-    item_w, gap, margin = 84 * density, 6 * density, 8 * density
+    item_w, gap, margin = CELL_DP * density, GAP_DP * density, MARGIN_DP * density
     return width - margin - (columns * item_w + (columns - 1) * gap)
 
 
@@ -313,13 +334,29 @@ def menu_cell_center(width, height, index, columns, expanded=True, density=DENSI
     screen the whole strip then shifts up, so ask for the collapsed position
     when steering to the toggle of a collapsed menu.
     """
-    item_w, item_h, gap, margin = 84 * density, 52 * density, 6 * density, 8 * density
+    item_w, item_h, gap, margin = CELL_DP * density, CELL_DP * density, GAP_DP * density, MARGIN_DP * density
     panel = columns * item_w + (columns - 1) * gap
     left = width - margin - panel
     rows = -(-expanded_items // columns) if expanded else 0
     strip = item_h + gap + rows * item_h + (rows - 1) * gap if rows else item_h
     top = max(min((height - item_h) / 2, height - strip), 0)
     if index == "toggle":
+        if not expanded:
+            # The slim handle, flush with the right edge. Opening the dock on a
+            # short screen shifts the strip up, and whatever then sits under the
+            # still pointer matters: a cell is safe (the service re-anchors and
+            # locks on it), the gap between two rows is not (a jitter into the
+            # cell above arms it). So enter at a height that will be inside
+            # row 0 after the shift, when that height is within the handle.
+            cy = top + item_h / 2
+            rows_open = -(-expanded_items // columns)
+            strip_open = item_h + gap + rows_open * item_h + (rows_open - 1) * gap
+            top_open = max(min((height - item_h) / 2, height - strip_open), 0)
+            row0_cy = top_open + item_h + gap + item_h / 2
+            handle_h = HANDLE_H_DP * density
+            if abs(row0_cy - cy) < handle_h / 2 - 10:
+                cy = row0_cy
+            return int(width - HANDLE_W_DP * density / 2), int(cy)
         return int(left + panel / 2), int(top + item_h / 2)
     grid_top = top + item_h + gap
     r, c = divmod(index, columns)
@@ -341,7 +378,8 @@ def clip_portrait(dev, out_dir, icon):
     pl = panel_left(W, 2)
     step(dev, "toggle: expand")
     dev.goto_cell(*menu_cell_center(W, H, "toggle", 2, expanded=False), pl)
-    dev.rest(DWELL + 0.6)
+    dev.rest(DWELL + 0.4)
+    dev.leave_dock()
     step(dev, "pause")
     dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 2), pl)
     dev.rest(DWELL + 0.6)  # the entry now reads Resume
@@ -377,7 +415,8 @@ def clip_landscape(dev, out_dir):
     pl = panel_left(W, 3)
     step(dev, "landscape: expand")
     dev.goto_cell(*menu_cell_center(W, H, "toggle", 3, expanded=False), pl)
-    dev.rest(DWELL + 0.6)
+    dev.rest(DWELL + 0.4)
+    dev.leave_dock()
     step(dev, "landscape: pause")
     dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 3), pl)
     dev.rest(DWELL + 0.6)  # Pause is reachable in landscape
