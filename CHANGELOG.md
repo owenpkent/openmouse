@@ -7,6 +7,15 @@ tagged release.
 
 ## [Unreleased]
 
+### Changed
+
+- The gesture menu is now a dock flush with the screen edge, made of 48 dp
+  square cells showing drawn symbols instead of words (tap, double tap, hold,
+  drag, swipe, scroll, Android's back / home / recents glyphs, a bell, a gear,
+  pause / play). Smaller cells, nothing to translate, and the same adaptive
+  widening on short screens. Collapsed, only a slim handle stays on the edge;
+  the pointer stops at the screen edge, so the handle is easy to reach.
+
 ### Added
 
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on

@@ -168,15 +168,17 @@ double-tap, long-press, drag, swipe, scroll) goes through `runGesture`, which
 dispatches directly on the modern path and does the legacy passthrough dance on
 API 24-33.
 
-The strip is laid out by the pure `MenuGeometry`: a grid whose toggle is
-anchored at its collapsed center (so it does not jump when the grid expands)
-and clamped to stay on screen on short/landscape displays. The grid is two
-columns wide on a tall screen; when the expanded strip would still run off a
+The strip is a dock flush with one screen edge, laid out by the pure
+`MenuGeometry`: square glyph cells (symbols, not words, so they stay small and
+need no translation) under a toggle that is anchored at its collapsed center
+(so it does not jump when the grid expands) and clamped to stay on screen on
+short/landscape displays. The grid is two columns wide on a tall screen; when the expanded strip would still run off a
 short one (a phone in landscape) it widens a column at a time until it fits or
 the screen width runs out, so the last row, Pause / Resume, stays reachable
-however the device is held. While collapsed, only the toggle is a hit target,
-so the rest of the screen clicks through; the left/right dock setting moves it
-off a busy edge.
+however the device is held. While collapsed, only a slim handle on the edge is
+a hit target (the screen edge stops the pointer, so a narrow target there is
+easy to hit with a mouse) and the rest of the screen clicks through; the
+left/right dock setting moves it off a busy edge.
 
 ### One-shot vs sticky modes
 

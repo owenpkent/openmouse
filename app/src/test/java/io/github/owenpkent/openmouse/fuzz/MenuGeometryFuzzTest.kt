@@ -21,7 +21,7 @@ import kotlin.math.abs
  *   toggle contains the point, an item index means that item contains it and
  *   the menu is expanded, and null means neither the toggle nor any visible
  *   item contains it;
- * - the toggle spans exactly the panel width;
+ * - the expanded toggle spans exactly the panel width;
  * - the column count stays between the preferred count and the entry count.
  *
  * Without `JAZZER_FUZZ=1` this only replays the seed corpus as a JUnit test.
@@ -39,6 +39,8 @@ class MenuGeometryFuzzTest {
             gap = data.consumeFloat(),
             margin = data.consumeFloat(),
             minColumns = columns,
+            handleW = if (data.consumeBoolean()) data.consumeFloat() else null,
+            handleH = if (data.consumeBoolean()) data.consumeFloat() else null,
         )
         val visibleItems = itemCount.coerceAtLeast(0)
         val minColumns = columns.coerceAtLeast(1)
@@ -56,7 +58,8 @@ class MenuGeometryFuzzTest {
 
             val toggle = g.toggle
             val toggleWidth = toggle.right - toggle.left
-            if (toggleWidth.isFinite() && g.panelWidth.isFinite()) {
+            // Collapsed, the toggle is the handle (any width); expanded it spans the panel.
+            if (expanded && toggleWidth.isFinite() && g.panelWidth.isFinite()) {
                 // Relative tolerance: left + panelWidth - left loses low bits for huge values.
                 val tolerance = 1e-3f * (1f + abs(g.panelWidth)) + 1e-3f * abs(toggle.left)
                 assertEquals(g.panelWidth, toggleWidth, tolerance, "toggle width != panel width")
