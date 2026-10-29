@@ -77,11 +77,13 @@ Most new gestures follow the same path:
 
 1. Add a value to `GestureAction` (in `menu/GestureMenu.kt`).
 2. Add a label string in `res/values/strings.xml` and a row in `GestureMenu`'s
-   `items` list. The 2-column grid resizes itself via `MenuGeometry`.
+   `items` list. The grid resizes itself via `MenuGeometry` (two columns,
+   more on a short screen).
 3. Add the injection method to `GestureDispatcher` (build a `GestureDescription`
    with the right strokes). Use existing methods as a template.
 4. Handle the new mode in `MouseAccessibilityService.performMode()`. Decide
-   whether it is one-shot (revert to `TAP`) or sticky. Two-point gestures use the
+   whether it is one-shot (revert to `TAP`), sticky, or repeating (add it to
+   `GestureAction.isRepeating` so a dwell re-arms in place). Two-point gestures use the
    `pendingX/pendingY` start-point flow.
 5. If it injects touches, dispatch through `runGesture` so the overlay passes the
    gesture through to the app below.

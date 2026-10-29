@@ -29,11 +29,22 @@ class CursorView(context: Context) : View(context) {
     /** Called when the physical primary (left) mouse button is pressed. */
     var onPrimaryButton: ((Float, Float) -> Unit)? = null
 
+    /** Called when any other mouse button (right, middle, back, forward) is pressed. */
+    var onOtherButton: (() -> Unit)? = null
+
     /** Called on a scroll-wheel turn: (x, y, vscroll) where vscroll > 0 is wheel-up. */
     var onScroll: ((Float, Float, Float) -> Unit)? = null
 
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
+
+    /**
+     * Called after the menu has been laid out for a new view size (rotation, a
+     * folding screen), which moves the menu under a pointer that has not sent
+     * an event; the service re-anchors the dwell machine on what is under the
+     * cursor now.
+     */
+    var onLayoutChanged: (() -> Unit)? = null
 
     private var cursorX = -1f
     private var cursorY = -1f
@@ -144,6 +155,7 @@ class CursorView(context: Context) : View(context) {
             cursorX = w / 2f
             cursorY = h / 2f
         }
+        onLayoutChanged?.invoke()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -216,9 +228,15 @@ class CursorView(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 report(event)
-                // A physical left-click is an immediate "standard click".
+                // ACTION_DOWN is the first button down (a second button while one
+                // is held arrives as ACTION_BUTTON_PRESS, not here), so buttonState
+                // names that button. Left is an immediate "standard click"; any
+                // other button is the user's own action, and the service locks
+                // dwell so it does not stack a click on top.
                 if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
                     onPrimaryButton?.invoke(cursorX, cursorY)
+                } else {
+                    onOtherButton?.invoke()
                 }
                 return true
             }

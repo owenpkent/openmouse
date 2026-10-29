@@ -21,6 +21,7 @@
     <string name="settings_dwell_click">Dwell click (auto-click on rest)</string>
     <string name="settings_dwell_time">Dwell time</string>
     <string name="settings_move_tolerance">Movement tolerance</string>
+    <string name="settings_post_action_tolerance">Re-arm distance after a click</string>
     <string name="settings_cursor_size">Cursor size</string>
     <string name="settings_cursor_color">Cursor color</string>
     <string name="settings_menu_side">Menu side</string>
@@ -29,6 +30,7 @@
     <string name="settings_apply_note">Changes apply immediately while OpenMouse is running.</string>
     <string name="settings_dwell_value">Dwell time:   %1$.1f s</string>
     <string name="settings_move_value">Movement tolerance:   %1$d dp</string>
+    <string name="settings_post_action_value">Re-arm distance after a click:   %1$d dp</string>
     <string name="settings_size_value">Cursor size:   %1$d%%</string>
 
     <string-array name="cursor_color_names">
@@ -53,4 +55,6 @@
     <string name="menu_recents">Recent</string>
     <string name="menu_notifications">Notif</string>
     <string name="menu_quick_settings">Quick</string>
+    <string name="menu_pause">Pause</string>
+    <string name="menu_resume">Resume</string>
 </resources>

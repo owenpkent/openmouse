@@ -33,6 +33,17 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getFloat(KEY_MOVE_DP, DEFAULT_MOVE_DP).coerceIn(MIN_MOVE_DP, MAX_MOVE_DP)
         set(value) = prefs.edit { putFloat(KEY_MOVE_DP, value.coerceIn(MIN_MOVE_DP, MAX_MOVE_DP)) }
 
+    /**
+     * How far (in dp) the pointer must travel after a dwell click before the next
+     * countdown may start. Separate from [moveThresholdDp] so it can be widened
+     * on its own: this is the setting that stops a resting hand from clicking
+     * the same spot twice. A value below the movement tolerance acts as the
+     * movement tolerance (the machine never lets this guard be the weaker one).
+     */
+    var postActionThresholdDp: Float
+        get() = prefs.getFloat(KEY_POST_ACTION_DP, DEFAULT_POST_ACTION_DP).coerceIn(MIN_POST_ACTION_DP, MAX_POST_ACTION_DP)
+        set(value) = prefs.edit { putFloat(KEY_POST_ACTION_DP, value.coerceIn(MIN_POST_ACTION_DP, MAX_POST_ACTION_DP)) }
+
     /** Cross-hair size multiplier. */
     var cursorScale: Float
         get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
@@ -63,6 +74,7 @@ class OpenMouseSettings(context: Context) {
         private const val KEY_DWELL_ENABLED = "dwell_enabled"
         private const val KEY_DWELL_MS = "dwell_ms"
         private const val KEY_MOVE_DP = "move_dp"
+        private const val KEY_POST_ACTION_DP = "post_action_dp"
         private const val KEY_CURSOR_SCALE = "cursor_scale"
         private const val KEY_CURSOR_COLOR = "cursor_color"
         private const val KEY_MENU_RIGHT = "menu_right"
@@ -74,6 +86,10 @@ class OpenMouseSettings(context: Context) {
         const val DEFAULT_MOVE_DP = 8f
         const val MIN_MOVE_DP = 4f
         const val MAX_MOVE_DP = 24f
+
+        const val DEFAULT_POST_ACTION_DP = 20f
+        const val MIN_POST_ACTION_DP = 4f
+        const val MAX_POST_ACTION_DP = 48f
 
         const val DEFAULT_CURSOR_SCALE = 1.0f
         const val MIN_CURSOR_SCALE = 0.6f

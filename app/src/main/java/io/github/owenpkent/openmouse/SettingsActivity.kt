@@ -27,6 +27,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var dwellLabel: TextView
     private lateinit var moveLabel: TextView
+    private lateinit var postActionLabel: TextView
     private lateinit var sizeLabel: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +37,7 @@ class SettingsActivity : AppCompatActivity() {
 
         dwellLabel = findViewById(R.id.dwellLabel)
         moveLabel = findViewById(R.id.moveLabel)
+        postActionLabel = findViewById(R.id.postActionLabel)
         sizeLabel = findViewById(R.id.sizeLabel)
 
         setupDwellToggle()
@@ -67,6 +69,14 @@ class SettingsActivity : AppCompatActivity() {
             updateMoveLabel(value)
         }
 
+        val postAction = findViewById<Slider>(R.id.postActionSlider)
+        postAction.value = settings.postActionThresholdDp
+        updatePostActionLabel(settings.postActionThresholdDp)
+        postAction.addOnChangeListener { _, value, _ ->
+            settings.postActionThresholdDp = value
+            updatePostActionLabel(value)
+        }
+
         val size = findViewById<Slider>(R.id.sizeSlider)
         size.value = settings.cursorScale * 100f
         updateSizeLabel(settings.cursorScale)
@@ -82,6 +92,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateMoveLabel(dp: Float) {
         moveLabel.text = getString(R.string.settings_move_value, dp.toInt())
+    }
+
+    private fun updatePostActionLabel(dp: Float) {
+        postActionLabel.text = getString(R.string.settings_post_action_value, dp.toInt())
     }
 
     private fun updateSizeLabel(scale: Float) {
