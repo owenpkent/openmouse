@@ -41,3 +41,9 @@ keystore.properties
 
 # Crash artifacts
 *.stackdump
+
+# Jazzer fuzzing scratch (the working corpus and raw findings). Reproducers worth
+# keeping go under app/src/test/resources/**/*FuzzTestInputs/ instead.
+.cifuzz-corpus/
+crash-*
+timeout-*

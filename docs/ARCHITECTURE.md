@@ -171,6 +171,16 @@ The pattern to follow when adding behavior: put the logic in a pure class, test
 it there, and keep the Android wrapper a straight pass-through. Tests live in
 `app/src/test/` and run with `./gradlew test`.
 
+Both pure classes are also fuzzed (Jazzer, under `app/src/test/.../fuzz/`),
+the same arrangement PowerToys uses for its Dwell Click engine: the fuzzer
+decodes its bytes into event sequences with adversarial coordinates, timestamps
+and settings, and invariants are asserted after every poll. That is why the pure
+classes clamp degenerate inputs instead of trusting the caller: a dwell time
+below 1 ms reads as 1 ms, a negative or NaN threshold as 0, a timestamp older
+than the rest anchor as zero elapsed time, and a negative item count or column
+count as 0 and 1. Fuzzing is opt-in (`JAZZER_FUZZ=1`); a plain `gradlew test`
+only replays the seed corpus. A nightly workflow runs it for real.
+
 ## Settings and live updates
 
 `SettingsActivity` has no Save button. Each control writes straight to

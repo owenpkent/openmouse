@@ -11,20 +11,27 @@ data class Bounds(val left: Float, val top: Float, val right: Float, val bottom:
  * The menu is a vertical strip docked to the right edge: a full-width toggle row
  * on top, then a [columns]-wide grid of [itemCount] entries below it when
  * expanded. The whole strip is centered vertically.
+ *
+ * Degenerate construction values are clamped rather than trusted (a negative
+ * item count becomes 0, fewer than one column becomes 1), so the layout is
+ * defined for any input; the fuzz target in `app/src/test/.../fuzz` relies on it.
  */
 class MenuGeometry(
-    private val itemCount: Int,
+    itemCount: Int,
     private val itemW: Float,
     private val itemH: Float,
     private val gap: Float,
     private val margin: Float,
-    private val columns: Int = 2,
+    columns: Int = 2,
 ) {
+    private val itemCount = itemCount.coerceAtLeast(0)
+    private val columns = columns.coerceAtLeast(1)
+
     /** The toggle (hamburger) row. Valid after [layout]. */
     var toggle: Bounds = Bounds(0f, 0f, 0f, 0f)
         private set
 
-    private val cells = ArrayList<Bounds>(itemCount)
+    private val cells = ArrayList<Bounds>(this.itemCount)
 
     /** Total width of the strip. */
     val panelWidth: Float get() = columns * itemW + (columns - 1) * gap
@@ -77,7 +84,9 @@ class MenuGeometry(
         return null
     }
 
-    private fun ceilDiv(a: Int, b: Int): Int = (a + b - 1) / b
+    // Integer math on a count that is at most a few dozen; use Long so an absurd
+    // count handed in by a fuzzer cannot overflow the intermediate sum.
+    private fun ceilDiv(a: Int, b: Int): Int = ((a.toLong() + b - 1) / b).toInt()
 
     companion object {
         const val TOGGLE_INDEX = -1

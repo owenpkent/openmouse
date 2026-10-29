@@ -12,9 +12,15 @@ gestures.
 3. Build and test:
    ```bash
    ./gradlew assembleDebug   # build the APK
-   ./gradlew test            # run JVM unit tests
+   ./gradlew test            # run JVM unit tests (JUnit 5)
    ./gradlew lint            # static analysis
    ```
+   The fuzz targets in `app/src/test/.../fuzz/` are part of `test`, where they
+   only replay their seed corpus. To actually fuzz (ten minutes per target):
+   ```bash
+   JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'
+   ```
+   CI runs the full ten-minute fuzz nightly (`.github/workflows/nightly-fuzz.yml`).
 
 To try a change on hardware: install the debug APK, plug in a mouse (USB OTG or
 Bluetooth), and enable **OpenMouse cursor** in Accessibility settings.
@@ -79,7 +85,10 @@ Most new gestures follow the same path:
    `pendingX/pendingY` start-point flow.
 5. If it injects touches, dispatch through `runGesture` so the overlay passes the
    gesture through to the app below.
-6. If you extracted any pure logic, add a unit test under `app/src/test/`.
+6. If you extracted any pure logic, add a unit test under `app/src/test/`. If
+   it consumes pointer positions, timestamps or settings, extend the matching
+   fuzz target under `app/src/test/.../fuzz/` (or add one) so the nightly
+   fuzz run drives it with arbitrary input.
 
 ## Reporting issues
 

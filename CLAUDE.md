@@ -16,13 +16,14 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 
 - Kotlin Android AccessibilityService. AGP 9.0.1 (built-in Kotlin, no separate plugin), Gradle wrapper 9.2.1, JDK 17, min/target/compile SDK 24/36/36, namespace `io.github.owenpkent.openmouse`. Deps via `gradle/libs.versions.toml`.
 - `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`.
-- `app/src/test/java/.../{click,menu}/` - JVM unit tests (`DwellMachineTest`, `MenuGeometryTest`).
+- `app/src/test/java/.../{click,menu}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
 - `docs/ARCHITECTURE.md` - read first. `platform/` + `Android.bp` - AOSP/LineageOS system-app build (not day-to-day, unvalidated). `fastlane/` - F-Droid/Play metadata.
 
 ## Build, run, test
 
 - Build: `./gradlew assembleDebug` (APK at `app/build/outputs/apk/debug/app-debug.apk`).
-- Test: `./gradlew test` (or `./gradlew testDebugUnitTest`).
+- Test: `./gradlew test` (or `./gradlew testDebugUnitTest`). Fuzz locally (ten minutes per target): `JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'`.
+- Pure classes must stay defined for any input (clamp, never throw): the fuzz targets assert that. When adding logic that takes positions, timestamps or settings, extend the matching fuzz target.
 - Lint: `./gradlew lint`. Run `./gradlew test lint` before opening a PR.
 - No device: boot an API 34+ AVD, install, grant the `ACCESS_RESTRICTED_SETTINGS` appop, and enable the service over adb (exact commands in CONTRIBUTING.md). A headless emulator cannot drive a real mouse, so the cursor pipeline is covered by unit tests, not the emulator.
 

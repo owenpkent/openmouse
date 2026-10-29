@@ -5,13 +5,19 @@ agp = "9.0.1"
 coreKtx = "1.13.1"
 appcompat = "1.7.0"
 material = "1.12.0"
-junit = "4.13.2"
+junitJupiter = "5.14.4"
+junitPlatform = "1.14.4"
+# Jazzer is the JVM libFuzzer: the fuzz tests under app/src/test/.../fuzz run as
+# plain JUnit tests (replaying the seed corpus) unless JAZZER_FUZZ=1 is set.
+jazzer = "0.30.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }
+junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version.ref = "junitPlatform" }
+jazzer-junit = { group = "com.code-intelligence", name = "jazzer-junit", version.ref = "jazzer" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

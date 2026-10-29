@@ -7,7 +7,22 @@ tagged release.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Jazzer fuzz targets for the pure `DwellMachine` and `MenuGeometry` cores,
+  mirroring the PowerToys Dwell Click fuzz target, plus a nightly GitHub Actions
+  fuzz workflow and a CI workflow (build, unit tests, lint).
+- Unit tests ported from the PowerToys Dwell Click engine suite (firing poll
+  clears the ring, reset locks, timestamps older than the anchor, negative and
+  NaN settings), on JUnit 5.
+
+### Fixed
+
+- `DwellMachine` stays defined for degenerate input: negative or NaN movement
+  thresholds clamp to 0, a dwell time below 1 ms reads as 1 ms, and an elapsed
+  time that overflows a Long saturates instead of wrapping (found by fuzzing).
+- `MenuGeometry` clamps a negative item count to 0 and fewer than one column to 1
+  instead of throwing.
 
 ## [0.1.0] - 2026-06-30
 
