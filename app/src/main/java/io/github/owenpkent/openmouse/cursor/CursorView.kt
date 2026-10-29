@@ -29,6 +29,9 @@ class CursorView(context: Context) : View(context) {
     /** Called when the physical primary (left) mouse button is pressed. */
     var onPrimaryButton: ((Float, Float) -> Unit)? = null
 
+    /** Called when any other mouse button (right, middle, back, forward) is pressed. */
+    var onOtherButton: (() -> Unit)? = null
+
     /** Called on a scroll-wheel turn: (x, y, vscroll) where vscroll > 0 is wheel-up. */
     var onScroll: ((Float, Float, Float) -> Unit)? = null
 
@@ -216,9 +219,15 @@ class CursorView(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 report(event)
-                // A physical left-click is an immediate "standard click".
+                // ACTION_DOWN is the first button down (a second button while one
+                // is held arrives as ACTION_BUTTON_PRESS, not here), so buttonState
+                // names that button. Left is an immediate "standard click"; any
+                // other button is the user's own action, and the service locks
+                // dwell so it does not stack a click on top.
                 if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
                     onPrimaryButton?.invoke(cursorX, cursorY)
+                } else {
+                    onOtherButton?.invoke()
                 }
                 return true
             }

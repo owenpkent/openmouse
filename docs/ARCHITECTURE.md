@@ -97,12 +97,17 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   with a tremor complete a dwell at all. The re-arm distance is how far the
   pointer must travel after a dwell click before a new countdown may start. Only
   the lock a dwell click leaves behind uses it; it is a separate setting so it
-  can be widened without making dwelling harder.
+  can be widened without making dwelling harder, and it never reads narrower
+  than the movement tolerance.
 - **Rest keys.** On every move the service hands the machine the menu entry under
   the cursor (or null over the app). While that key is unchanged the entry itself
   is the tolerance: a tremor inside a menu cell, however large, neither restarts
   the countdown nor re-fires the entry. Entering a cell starts its countdown at
-  once; only leaving it re-arms. This is the PowerToys toolbar rule ("an
+  once. Leaving a cell for the app locks and the ordinary distance applies from
+  the rest point, so a slip into the gap between cells, or a menu that re-lays
+  out under a still pointer (the strip shifts on short screens), never taps the
+  app. After a menu choice the service re-feeds the entry now under the pointer
+  before locking, for the same reason. This is the PowerToys toolbar rule ("an
   activated button will not fire again until the pointer leaves it").
 - **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
   not on the menu, so a user who cannot click can still reach Resume. It locks in

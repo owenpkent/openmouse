@@ -62,6 +62,11 @@ class MouseAccessibilityService : AccessibilityService() {
     private var pendingX: Float? = null
     private var pendingY: Float? = null
 
+    // Last reported pointer position, for re-anchoring the dwell machine when the
+    // menu moves without the pointer doing so.
+    private var lastPointerX = 0f
+    private var lastPointerY = 0f
+
     // Legacy passthrough state (unused on the modern path).
     private var gesturesInFlight = 0
     private var lastPointerMs = 0L
@@ -105,6 +110,8 @@ class MouseAccessibilityService : AccessibilityService() {
         // Legacy capture path: CursorView reports mouse events to these.
         view.onMove = { x, y -> onPointerMoved(x, y, draw = false) }
         view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y, fromDwell = false) }
+        // Same rule as the modern path: another button is the user's own action.
+        view.onOtherButton = { dwellClicker?.lockUntilMove() }
         view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         cursorView = view
 
@@ -186,6 +193,8 @@ class MouseAccessibilityService : AccessibilityService() {
 
     private fun onPointerMoved(x: Float, y: Float, draw: Boolean) {
         lastPointerMs = SystemClock.uptimeMillis()
+        lastPointerX = x
+        lastPointerY = y
         if (draw) cursorView?.setCursorPosition(x, y)
         // The menu entry under the cursor is the dwell machine's rest key: while
         // the pointer stays inside one entry, that entry is the tolerance, so a
@@ -209,9 +218,23 @@ class MouseAccessibilityService : AccessibilityService() {
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)
         gestureMenu?.setDockRight(prefs.menuOnRight)
+        // Moving the strip changes what sits under a still pointer; configure()
+        // has already locked, so this only corrects the anchored entry.
+        resyncRestKey(lastPointerX, lastPointerY)
 
         // Dwell click can be turned off entirely (physical-button clicks still work).
         if (prefs.dwellEnabled) dwellClicker?.start() else dwellClicker?.stop()
+    }
+
+    /**
+     * Re-feed the entry under ([x], [y]) to the dwell machine after the menu has
+     * been laid out again, then lock, so the pointer must leave that entry (or
+     * travel the ordinary distance) before anything fires.
+     */
+    private fun resyncRestKey(x: Float, y: Float) {
+        val clicker = dwellClicker ?: return
+        clicker.onCursorMoved(x, y, restKey = gestureMenu?.hitTest(x, y))
+        clicker.lockUntilMove()
     }
 
     /**
@@ -232,7 +255,10 @@ class MouseAccessibilityService : AccessibilityService() {
         val hit = menu?.hitTest(x, y)
         if (menu != null && hit != null) {
             onMenuAction(menu, hit)
-            dwellClicker?.lockUntilMove()
+            // The menu may have re-laid out under a still pointer (the toggle
+            // shifts the strip on short screens), so the entry the machine saw
+            // last is stale. Anchor the lock on whatever is under the cursor now.
+            resyncRestKey(x, y)
             return
         }
 

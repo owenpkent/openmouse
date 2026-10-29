@@ -328,6 +328,19 @@ class DwellMachineTest {
         }
 
         @Test
+        fun postActionDistanceNeverReadsNarrowerThanTheMoveTolerance() {
+            // The guard a click leaves behind must never be weaker than any other
+            // lock, so a narrower setting acts as the movement tolerance.
+            val m = machine(post = 2f)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.onMove(105f, 100f, 110L) // 5 px: past 2, under 10, still parked
+            assertFalse(m.poll(300L).clicked)
+            m.onMove(111f, 100f, 310L) // 11 px clears the movement tolerance
+            assertTrue(m.poll(500L).clicked)
+        }
+
+        @Test
         fun postActionDistanceDefaultsToTheMoveTolerance() {
             val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f)
             arm(m)
@@ -462,11 +475,44 @@ class DwellMachineTest {
         }
 
         @Test
-        fun leavingATargetRestartsTheCountdown() {
+        fun slippingOffATargetIntoTheGapLocksInsteadOfTappingTheApp() {
+            val m = machine() // 10 px tolerance
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "back")
+            // 3 px into the 6 dp gap between cells: the cell's countdown is
+            // abandoned, and nothing may tap the app through the gap.
+            m.onMove(103f, 100f, 50L, restKey = null)
+            assertFalse(m.poll(100L).clicked)
+            assertFalse(m.poll(10_000L).clicked)
+            assertEquals(0f, m.poll(10_000L).progress, EPS)
+
+            // From the rest point the ordinary distance rule applies again.
+            m.onMove(111f, 100f, 10_000L, restKey = null) // 11 px from (100,100)
+            assertFalse(m.poll(10_050L).clicked)
+            assertTrue(m.poll(10_100L).clicked)
+        }
+
+        @Test
+        fun aMenuThatMovesUnderAStillPointerDoesNotStartACountdown() {
+            // The service re-feeds the key after a menu re-layout; this is the
+            // machine half: the entry under the pointer changes to "nothing"
+            // without the pointer moving, and that must not arm anything.
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "toggle")
+            assertTrue(m.poll(100L).clicked)
+            m.lockUntilMove() // menu choice; the strip collapses and shifts away
+
+            m.onMove(100f, 101f, 200L, restKey = null) // 1 px jitter, now over the app
+            assertFalse(m.poll(10_000L).clicked)
+        }
+
+        @Test
+        fun leavingATargetByTheOrdinaryDistanceStartsAnAppCountdown() {
             val m = machine()
             m.reset(0L)
             m.onMove(100f, 100f, 0L, restKey = "back")
-            m.onMove(103f, 100f, 50L, restKey = null) // 3 px, but into the gap
+            m.onMove(100f, 160f, 50L, restKey = null) // 60 px: a real move off the menu
             assertFalse(m.poll(100L).clicked)
             assertTrue(m.poll(150L).clicked)
         }

@@ -37,7 +37,8 @@ class OpenMouseSettings(context: Context) {
      * How far (in dp) the pointer must travel after a dwell click before the next
      * countdown may start. Separate from [moveThresholdDp] so it can be widened
      * on its own: this is the setting that stops a resting hand from clicking
-     * the same spot twice.
+     * the same spot twice. A value below the movement tolerance acts as the
+     * movement tolerance (the machine never lets this guard be the weaker one).
      */
     var postActionThresholdDp: Float
         get() = prefs.getFloat(KEY_POST_ACTION_DP, DEFAULT_POST_ACTION_DP).coerceIn(MIN_POST_ACTION_DP, MAX_POST_ACTION_DP)
@@ -86,7 +87,7 @@ class OpenMouseSettings(context: Context) {
         const val MIN_MOVE_DP = 4f
         const val MAX_MOVE_DP = 24f
 
-        const val DEFAULT_POST_ACTION_DP = 8f
+        const val DEFAULT_POST_ACTION_DP = 20f
         const val MIN_POST_ACTION_DP = 4f
         const val MAX_POST_ACTION_DP = 48f
 

@@ -15,6 +15,7 @@ tagged release.
 - A separate "re-arm distance after a click" setting: how far the pointer must
   travel after a dwell click before the next countdown may start, so a shaky
   hand cannot click the same spot twice (the movement tolerance is unchanged).
+  Default 20 dp; it never acts narrower than the movement tolerance.
 - Scroll up / down repeat while the pointer rests: one notch per dwell period,
   instead of needing a fresh move between notches.
 - Jazzer fuzz targets for the pure `DwellMachine` and `MenuGeometry` cores,
@@ -29,10 +30,13 @@ tagged release.
 - Menu entries no longer re-fire while the pointer stays on them. A tremor
   inside a cell used to restart the countdown and could trigger Back or the
   menu toggle every dwell period; the cell is now the tolerance, and an entry
-  re-arms only after the pointer leaves it.
+  re-arms only after the pointer leaves it. Leaving a cell for the app (or the
+  gap between cells) locks until the ordinary movement tolerance is cleared, and
+  the service re-anchors on the entry under the pointer after a menu choice, so
+  a menu strip that shifts on a short screen cannot tap the app.
 - A right or middle mouse button press now locks the dwell machine like a left
-  press does, and a left click is detected from the button that changed rather
-  than every button currently held.
+  press does, on both input paths. On API 34+ a left click is detected from the
+  button that changed rather than every button currently held.
 - `DwellMachine` stays defined for degenerate input: negative or NaN movement
   thresholds clamp to 0, a dwell time below 1 ms reads as 1 ms, and an elapsed
   time that overflows a Long saturates instead of wrapping (found by fuzzing).

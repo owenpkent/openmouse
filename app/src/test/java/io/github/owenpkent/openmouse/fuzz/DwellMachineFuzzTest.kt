@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
  * - nothing fires before the pointer has moved (or been re-armed in place)
  *   since the last lock, reset, settings change, pause toggle, or click;
  * - the same rest never fires twice without a move or an in-place re-arm;
+ * - a keyed target the machine locked on (by firing or by an explicit lock)
+ *   never fires again while every move since has kept that key;
  * - while paused, a rest over the app (null key) never fires;
  * - progress never decreases while the pointer rests and time moves forward.
  *
@@ -49,6 +51,14 @@ class DwellMachineFuzzTest {
         var lastKey: Any? = null
         var paused = false
         var clickedThisRest = false // a click happened with no onMove/rearm since
+        // The keyed target the machine last locked on (by click or lock), while
+        // every move since has kept that key: it must not fire again.
+        var parkedOnLockedKey = false
+        var lockedKey: Any? = null
+        fun noteLock() {
+            parkedOnLockedKey = lastKey != null
+            lockedKey = lastKey
+        }
         var lastProgress = 0f
         var lastPollNow = Long.MIN_VALUE
         var haveLastPoll = false
@@ -79,24 +89,28 @@ class DwellMachineFuzzTest {
                     armedSinceLock = true
                     clickedThisRest = false
                     haveLastPoll = false
+                    if (lastKey != lockedKey) parkedOnLockedKey = false
                 }
 
                 4 -> {
                     machine.lockUntilMove()
                     armedSinceLock = false
                     haveLastPoll = false
+                    noteLock()
                 }
 
                 5 -> {
                     machine.lockAfterAction()
                     armedSinceLock = false
                     haveLastPoll = false
+                    noteLock()
                 }
 
                 6 -> {
                     machine.reset(now)
                     armedSinceLock = false
                     haveLastPoll = false
+                    noteLock()
                 }
 
                 7 -> {
@@ -105,6 +119,7 @@ class DwellMachineFuzzTest {
                     machine.lockUntilMove()
                     armedSinceLock = false
                     haveLastPoll = false
+                    noteLock()
                 }
 
                 8 -> {
@@ -116,6 +131,7 @@ class DwellMachineFuzzTest {
                         paused = next
                         armedSinceLock = false
                         haveLastPoll = false
+                        noteLock()
                     }
                 }
 
@@ -124,6 +140,7 @@ class DwellMachineFuzzTest {
                     armedSinceLock = true
                     clickedThisRest = false
                     haveLastPoll = false
+                    parkedOnLockedKey = false // an explicit request to fire again in place
                 }
 
                 else -> {
@@ -139,8 +156,10 @@ class DwellMachineFuzzTest {
                         assertTrue(armedSinceLock, "clicked without any movement or re-arm since the last lock")
                         assertFalse(clickedThisRest, "the same rest fired twice")
                         assertFalse(paused && lastKey == null, "fired over the app while paused")
+                        assertFalse(parkedOnLockedKey, "keyed target $lastKey re-fired without the pointer leaving it")
                         clickedThisRest = true
                         haveLastPoll = false
+                        noteLock() // a firing poll locks on the current key
                     } else {
                         if (paused && lastKey == null) {
                             assertEquals(0f, poll.progress, "progress reported over the app while paused")

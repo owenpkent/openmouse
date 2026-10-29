@@ -24,13 +24,15 @@ import kotlin.math.hypot
  *   far the pointer must travel after a click before a new countdown may start,
  *   kept separate so it can be widened without making dwelling harder. Only the
  *   lock a click leaves behind uses it; every other lock uses the ordinary
- *   tolerance.
+ *   tolerance. It never reads narrower than the movement tolerance.
  * - **Rest keys.** [onMove] takes an optional key naming the target under the
  *   pointer (the service passes the menu cell, or null over the app). While the
  *   key is unchanged the target itself is the tolerance: jitter inside a menu
  *   cell never restarts or re-arms, however large, and only leaving the cell
- *   does. Entering a cell starts its countdown at once. This is what stops a
- *   parked pointer from firing the same menu entry every dwell period.
+ *   does. Entering a cell starts its countdown at once; leaving a cell for the
+ *   app locks, and the ordinary distance from the rest point applies again.
+ *   This is what stops a parked pointer from firing the same menu entry every
+ *   dwell period, and a slip off a cell from tapping the app beside it.
  * - **Pause** ([setPaused]) suspends dwelling on the app but not on the menu
  *   (any rest with a non-null key), so a user who cannot click can still reach
  *   the resume entry. It locks in both directions.
@@ -90,9 +92,10 @@ class DwellMachine(
     val isPaused: Boolean get() = paused
 
     /**
-     * Clear transient state and lock. Called when the engine (re)starts, so a
-     * pointer left resting across a stop/start cycle cannot fire the instant the
-     * machine comes back.
+     * Lock and re-baseline the rest timer. Called when the engine (re)starts, so
+     * a pointer left resting across a stop/start cycle cannot fire the instant
+     * the machine comes back. Pause is a user choice, not transient state, and
+     * survives it.
      */
     fun reset(nowMs: Long) {
         lockUntilMove()
@@ -111,21 +114,46 @@ class DwellMachine(
         currentKey = restKey
 
         val keyChanged = restKey != anchorKey
+
+        // Entering a keyed target (a menu cell) starts its countdown at once,
+        // whatever the distance: the cell edge is the deliberate act.
+        if (keyChanged && restKey != null) {
+            startCountdown(x, y, restKey, nowMs)
+            return
+        }
+
+        // Leaving a keyed target for nothing in particular (the app, or the gap
+        // between cells) is not the same act. Any countdown the cell had is
+        // abandoned, and from here the ordinary distance rule applies, measured
+        // from where the pointer rested. Without this, a 3 px slip into a 6 dp
+        // gap, or a menu that re-laid out under a still pointer, would start a
+        // countdown that taps the app.
+        if (keyChanged) {
+            if (!locked) {
+                locked = true
+                lockedAfterAction = false
+            }
+            anchorKey = null
+        }
+
         // Inside the same keyed target the target is the tolerance: no distance
         // check at all, so a tremor within a menu cell can neither cancel its
         // countdown nor re-fire an entry the pointer never left.
-        val insideSameTarget = restKey != null && !keyChanged
+        if (restKey != null) return
 
         // A post-action lock uses the wider re-arm distance; every other lock
         // (startup, settings change, physical click, pause) and a running
         // countdown use the ordinary tolerance. Strictly greater: a move of
         // exactly the threshold still counts as resting.
-        val threshold = if (locked && lockedAfterAction) postActionThresholdPx else moveThresholdPx
-        val moved = !insideSameTarget &&
-            hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > threshold
-
-        if (moved || keyChanged) startCountdown(x, y, restKey, nowMs)
+        val threshold = if (locked && lockedAfterAction) effectivePostActionThresholdPx() else moveThresholdPx
+        val moved = hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > threshold
+        if (moved) startCountdown(x, y, restKey, nowMs)
     }
+
+    // The re-arm distance exists to be wider than the movement tolerance; a value
+    // below it would make the lock a click leaves behind weaker than any other
+    // lock, so it reads as the movement tolerance instead.
+    private fun effectivePostActionThresholdPx(): Float = maxOf(postActionThresholdPx, moveThresholdPx)
 
     /**
      * Lock at the current position with the ordinary tolerance: a physical click,
@@ -142,10 +170,10 @@ class DwellMachine(
 
     /**
      * Lock at the current position with the wider post-action distance. [poll]
-     * applies this itself when a dwell fires; it is public for callers that
-     * perform an action from a dwell by another route.
+     * applies this itself when a dwell fires; the fuzz target also drives it
+     * directly.
      */
-    fun lockAfterAction() {
+    internal fun lockAfterAction() {
         locked = true
         lockedAfterAction = true
         anchorX = currentX
