@@ -145,9 +145,12 @@ app/src/main/
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml
 
-app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests
+app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests (JUnit 5)
 ├── click/DwellMachineTest.kt
-└── menu/MenuGeometryTest.kt
+├── menu/MenuGeometryTest.kt
+└── fuzz/                            Jazzer fuzz targets (run nightly)
+    ├── DwellMachineFuzzTest.kt
+    └── MenuGeometryFuzzTest.kt
 ```
 
 ## Testing
@@ -160,9 +163,26 @@ classes with no Android dependencies, so it runs as fast JVM unit tests:
 - `MenuGeometry` -- the menu's layout and hit-testing
 
 ```bash
-./gradlew test          # run all unit tests
+./gradlew test          # run all unit tests (fuzz targets replay their seed corpus)
 ./gradlew testDebugUnitTest
 ```
+
+The same pure classes are also fuzzed with [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer),
+the JVM libFuzzer, mirroring the fuzz target PowerToys ships for its Dwell Click
+engine. The targets under `app/src/test/.../fuzz/` feed arbitrary event
+sequences, coordinates, timestamps and settings into `DwellMachine` and
+`MenuGeometry` and check invariants after every step (progress stays in 0..1,
+nothing fires before the pointer moves, the same rest never fires twice, hit-test
+results agree with the cell bounds). They run as ordinary unit tests unless
+fuzzing is switched on:
+
+```bash
+JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'   # ten minutes per target
+```
+
+The [nightly workflow](.github/workflows/nightly-fuzz.yml) runs each target for
+ten minutes and uploads any reproducing input as an artifact; commit it under
+`app/src/test/resources/` to keep it as a regression test.
 
 When adding behavior, prefer putting the logic in a pure class and testing it
 there, keeping the Android wrapper a straight pass-through.

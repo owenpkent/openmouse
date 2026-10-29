@@ -1,0 +1,47 @@
+name: Nightly fuzz
+
+# Runs the Jazzer fuzz targets under app/src/test/.../fuzz in fuzzing mode for
+# their full @FuzzTest maxDuration (10 minutes each). Any finding fails the job;
+# the reproducing input Jazzer writes next to the seed corpus is uploaded so it
+# can be committed as a permanent regression test.
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz pure cores (Jazzer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Fuzz
+        env:
+          JAZZER_FUZZ: "1"
+        run: ./gradlew testDebugUnitTest --tests '*FuzzTest' --no-daemon
+
+      - name: Upload findings and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings
+          path: |
+            app/src/test/resources/**/*FuzzTestInputs/
+            app/crash-*
+            app/timeout-*
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore

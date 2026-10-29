@@ -62,6 +62,22 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all { test ->
+            // JUnit 5 for the plain tests and for Jazzer's @FuzzTest.
+            test.useJUnitPlatform()
+
+            // Fuzzing is opt-in: with JAZZER_FUZZ unset the fuzz tests only replay
+            // their seed corpus, so an ordinary `gradlew test` stays fast. With
+            // JAZZER_FUZZ=1 each target fuzzes for its @FuzzTest maxDuration, and
+            // Jazzer fuzzes only one target per JVM, so every test class gets its
+            // own JVM in that mode or the second target is silently skipped.
+            System.getenv("JAZZER_FUZZ")?.let {
+                test.environment("JAZZER_FUZZ", it)
+                test.setForkEvery(1)
+            }
+            // Jazzer attaches its agent at runtime; JDK 21+ warns unless this is set.
+            test.jvmArgs("-XX:+EnableDynamicAgentLoading")
+        }
     }
 }
 
@@ -70,5 +86,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
-    testImplementation(libs.junit)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.jazzer.junit)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
