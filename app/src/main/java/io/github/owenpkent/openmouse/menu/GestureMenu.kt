@@ -23,7 +23,7 @@ enum class GestureAction {
 
     /**
      * Modes that repeat while the pointer keeps resting (one scroll notch per
-     * dwell period), rather than locking until it moves.
+     * repeat interval after a first full dwell), rather than locking until it moves.
      */
     val isRepeating: Boolean get() = this == SCROLL_UP || this == SCROLL_DOWN
 }

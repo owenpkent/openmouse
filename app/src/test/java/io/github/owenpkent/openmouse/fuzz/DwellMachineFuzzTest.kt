@@ -41,6 +41,7 @@ class DwellMachineFuzzTest {
             dwellTimeMs = data.consumeLong(),
             moveThresholdPx = data.consumeFloat(),
             postActionThresholdPx = data.consumeFloat(),
+            repeatIntervalMs = data.consumeLong(),
         )
         var now = 0L
         machine.reset(now)
@@ -115,7 +116,7 @@ class DwellMachineFuzzTest {
 
                 7 -> {
                     // Mirrors DwellClicker.configure: new values, then lock.
-                    machine.configure(data.consumeLong(), data.consumeFloat(), data.consumeFloat())
+                    machine.configure(data.consumeLong(), data.consumeFloat(), data.consumeFloat(), data.consumeLong())
                     machine.lockUntilMove()
                     armedSinceLock = false
                     haveLastPoll = false

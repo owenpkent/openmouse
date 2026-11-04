@@ -15,10 +15,11 @@ import android.os.SystemClock
 class DwellClicker(
     dwellTimeMs: Long = DwellMachine.DEFAULT_DWELL_MS,
     moveThresholdPx: Float = DwellMachine.DEFAULT_MOVE_THRESHOLD_PX,
+    repeatIntervalMs: Long = dwellTimeMs,
     private val onProgress: (Float) -> Unit,
     private val onClick: (Float, Float) -> Unit,
 ) {
-    private val machine = DwellMachine(dwellTimeMs, moveThresholdPx)
+    private val machine = DwellMachine(dwellTimeMs, moveThresholdPx, repeatIntervalMs = repeatIntervalMs)
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
 
@@ -59,7 +60,7 @@ class DwellClicker(
     /**
      * Restart the countdown where the pointer already rests, for repeating
      * actions (scroll). Called right after such an action fires, so another
-     * one lands each dwell period while the pointer stays put.
+     * one lands each repeat interval while the pointer stays put.
      */
     fun rearmInPlace() {
         machine.rearmInPlace(SystemClock.uptimeMillis())
@@ -83,8 +84,8 @@ class DwellClicker(
     }
 
     /** Update dwell timing live (from a settings change). */
-    fun configure(dwellTimeMs: Long, moveThresholdPx: Float, postActionThresholdPx: Float) {
-        machine.configure(dwellTimeMs, moveThresholdPx, postActionThresholdPx)
+    fun configure(dwellTimeMs: Long, moveThresholdPx: Float, postActionThresholdPx: Float, repeatIntervalMs: Long) {
+        machine.configure(dwellTimeMs, moveThresholdPx, postActionThresholdPx, repeatIntervalMs)
         // Re-baseline so lowering the dwell time mid-rest can't fire an instant
         // click; the next move past the threshold re-arms it.
         machine.lockUntilMove()

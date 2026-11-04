@@ -221,6 +221,7 @@ class MouseAccessibilityService : AccessibilityService() {
             prefs.dwellTimeMs,
             prefs.moveThresholdDp * density,
             prefs.postActionThresholdDp * density,
+            prefs.scrollRepeatMs,
         )
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)
@@ -252,7 +253,7 @@ class MouseAccessibilityService : AccessibilityService() {
      * What happens to the dwell machine afterwards depends on the route:
      * - a dwell that fired an app action has already locked itself with the
      *   post-action distance, except a repeating mode (scroll), which re-arms in
-     *   place so another notch lands each dwell period while the pointer rests;
+     *   place so another notch lands each repeat interval while the pointer rests;
      * - a menu choice or a physical click locks with the ordinary tolerance. A
      *   menu entry cannot re-fire until the pointer leaves it anyway, because
      *   the entry is the machine's rest key.

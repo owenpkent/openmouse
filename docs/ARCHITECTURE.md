@@ -70,7 +70,7 @@ edges, each guarded:
    leave the overlay stuck non-touchable and freeze the cursor). The bookkeeping
    is the pure `PassthroughGate`: the watchdog deadline belongs to the *oldest*
    outstanding gesture and later gestures never push it out, so a repeating
-   scroll (one notch per dwell period) cannot keep postponing recovery after a
+   scroll (one notch per repeat interval) cannot keep postponing recovery after a
    lost callback.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
@@ -123,9 +123,13 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   while paused, so a rest key that went stale between pointer events can never
   tap the app; physical clicks are unaffected.
 - **Scroll repeats in place.** After a scroll dwell the service re-arms the
-  machine at the same anchor instead of waiting for movement, so another notch
-  lands each dwell period while the pointer keeps resting. Moving away re-anchors
-  as usual.
+  machine at the same anchor instead of waiting for movement. Only the first
+  notch at a rest point waits the full dwell time, because that one is the
+  decision; the re-armed countdown runs for the scroll repeat interval (400 ms
+  by default, a setting), so another notch lands each interval while the
+  pointer keeps resting. One notch per dwell time, three lines a second at the
+  defaults, was too slow to read a page by. Moving away, or any lock, goes back
+  to the full dwell time.
 
 `SystemClock.uptimeMillis()` is used (not wall-clock) so the timing is immune to
 clock changes. Changing a setting live re-locks, so dragging the dwell slider
@@ -189,7 +193,7 @@ After it runs, a mode either reverts to `TAP` (one-shot) or stays selected
   back to tapping.
 - **Sticky**: tap, scroll-up, scroll-down. Scrolling is repeatable, so it stays
   active; a scroll dwell also re-arms in place, so holding still keeps
-  scrolling one notch per dwell period.
+  scrolling one notch per repeat interval after the first full dwell.
 
 The Pause entry is neither: it toggles dwell clicking on the app on and off,
 reads "Resume" while paused, and stays reachable by dwell because the machine

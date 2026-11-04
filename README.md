@@ -91,10 +91,11 @@ two input-capture paths and how injected gestures reach the app below.
   cell does not restart or repeat it, only leaving and coming back does
 - Pause / Resume from the menu: stops dwell clicking on the app while the menu
   (and physical clicks) keep working
-- Scroll modes repeat while the pointer rests: one notch per dwell period
+- Scroll modes repeat while the pointer rests: the first notch after a full
+  dwell, then one every repeat interval
 - Settings screen (applied live): dwell time, movement tolerance, re-arm distance
-  after a click, cursor size, cursor color, menu side, and a dwell-click on/off
-  toggle
+  after a click, scroll repeat interval, cursor size, cursor color, menu side,
+  and a dwell-click on/off toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
 

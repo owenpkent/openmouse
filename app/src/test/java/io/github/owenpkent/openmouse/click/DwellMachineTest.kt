@@ -375,7 +375,8 @@ class DwellMachineTest {
         @Test
         fun rearmInPlaceFiresAgainWithoutMovement() {
             // Scroll is the one mode that does not lock after firing: the caller
-            // re-arms in place and another notch lands each dwell period.
+            // re-arms in place and another notch lands each repeat interval (the dwell
+            // time here, since this machine has no separate interval).
             val m = machine()
             arm(m)
             assertTrue(m.poll(100L).clicked)
@@ -409,6 +410,113 @@ class DwellMachineTest {
             m.setPaused(true)
             m.rearmInPlace(100L)
             assertFalse(m.poll(1000L).clicked)
+        }
+    }
+
+    @Nested
+    inner class RepeatInterval {
+
+        // 100 ms dwell with a 40 ms repeat interval; the shipping defaults are
+        // 1000 ms and 400 ms.
+        private fun machine() = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 40L)
+
+        @Test
+        fun firstNotchWaitsTheDwellTimeAndLaterNotchesTheRepeatInterval() {
+            val m = machine()
+            arm(m)
+            assertFalse(m.poll(99L).clicked)
+            assertTrue(m.poll(100L).clicked) // the decision: a full dwell
+            m.rearmInPlace(100L)
+            assertFalse(m.poll(139L).clicked)
+            assertTrue(m.poll(140L).clicked) // then one notch per interval
+            m.rearmInPlace(140L)
+            assertEquals(0.5f, m.poll(160L).progress, EPS) // progress is against the interval
+            assertTrue(m.poll(180L).clicked)
+        }
+
+        @Test
+        fun movementGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.onMove(300f, 300f, 110L) // a new spot is a new decision
+            assertFalse(m.poll(150L).clicked) // 40 ms is no longer enough
+            assertFalse(m.poll(209L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun aLockGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.lockUntilMove() // a physical click, a menu choice, a wheel turn
+            m.onMove(300f, 300f, 110L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun pauseGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.setPaused(true)
+            m.setPaused(false)
+            m.onMove(300f, 300f, 110L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun clicksIgnoreTheInterval() {
+            // Only a re-arm in place uses the interval. A click locks, and the
+            // movement that re-arms it starts a full dwell.
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.onMove(300f, 300f, 100L)
+            assertFalse(m.poll(140L).clicked)
+            assertTrue(m.poll(200L).clicked)
+        }
+
+        @Test
+        fun aZeroIntervalClampsToOneMillisecond() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 0L)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            val same = m.poll(100L) // no elapsed time: no notch, and no NaN
+            assertFalse(same.clicked)
+            assertEquals(0f, same.progress, EPS)
+            assertTrue(m.poll(101L).clicked)
+        }
+
+        @Test
+        fun withoutASeparateIntervalTheRepeatUsesTheDwellTime() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(200L).clicked)
+        }
+
+        @Test
+        fun configureChangesTheIntervalLive() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.configure(dwellTimeMs = 100L, moveThresholdPx = 10f, postActionThresholdPx = 10f, repeatIntervalMs = 20L)
+            m.lockUntilMove() // what DwellClicker.configure does
+            m.onMove(300f, 300f, 100L)
+            assertTrue(m.poll(200L).clicked)
+            m.rearmInPlace(200L)
+            assertFalse(m.poll(219L).clicked)
+            assertTrue(m.poll(220L).clicked)
         }
     }
 

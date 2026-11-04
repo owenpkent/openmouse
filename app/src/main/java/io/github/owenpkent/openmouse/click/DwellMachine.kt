@@ -40,8 +40,12 @@ import kotlin.math.hypot
  *   the resume entry. It locks in both directions.
  * - **Repeat in place** ([rearmInPlace]) restarts the countdown at the same
  *   anchor without requiring movement, for actions that are modes rather than
- *   one-shots (scrolling): one notch per dwell period for as long as the pointer
- *   keeps resting.
+ *   one-shots (scrolling). Only the first notch at a rest point waits the full
+ *   dwell time, because that one is the decision; a re-armed countdown runs for
+ *   the repeat interval instead, so another notch lands each interval for as
+ *   long as the pointer keeps resting (one notch per dwell time, three lines
+ *   every second at the defaults, was too slow to read a page by). Movement,
+ *   and every lock, go back to the full dwell time.
  *
  * The machine stays defined for any input rather than trusting its caller: a
  * dwell time below 1 ms reads as 1 ms, a negative (or NaN) threshold as 0, a
@@ -53,10 +57,15 @@ class DwellMachine(
     dwellTimeMs: Long = DEFAULT_DWELL_MS,
     moveThresholdPx: Float = DEFAULT_MOVE_THRESHOLD_PX,
     postActionThresholdPx: Float = moveThresholdPx,
+    repeatIntervalMs: Long = dwellTimeMs,
 ) {
     private var dwellTimeMs = clampDwell(dwellTimeMs)
     private var moveThresholdPx = clampThreshold(moveThresholdPx)
     private var postActionThresholdPx = clampThreshold(postActionThresholdPx)
+    // The period of a countdown re-armed in place ([rearmInPlace]). Without a
+    // separate value it is the dwell time, so a caller that never re-arms in
+    // place sees no difference.
+    private var repeatIntervalMs = clampDwell(repeatIntervalMs)
 
     /**
      * Update the settings live. The caller should [lockUntilMove] afterwards (as
@@ -67,10 +76,12 @@ class DwellMachine(
         dwellTimeMs: Long,
         moveThresholdPx: Float,
         postActionThresholdPx: Float = moveThresholdPx,
+        repeatIntervalMs: Long = dwellTimeMs,
     ) {
         this.dwellTimeMs = clampDwell(dwellTimeMs)
         this.moveThresholdPx = clampThreshold(moveThresholdPx)
         this.postActionThresholdPx = clampThreshold(postActionThresholdPx)
+        this.repeatIntervalMs = clampDwell(repeatIntervalMs)
     }
 
     // The position (and target key) the countdown is measured from, and the
@@ -87,6 +98,10 @@ class DwellMachine(
     private var locked = true
     private var lockedAfterAction = false
     private var paused = false
+    // True while the running countdown is one that [rearmInPlace] started: it
+    // runs for the repeat interval, not the dwell time. Cleared by any new
+    // countdown that movement starts, and by every lock.
+    private var repeating = false
 
     /** A snapshot of the machine at a point in time. */
     data class Poll(val progress: Float, val clicked: Boolean, val x: Float, val y: Float)
@@ -165,6 +180,7 @@ class DwellMachine(
     fun lockUntilMove() {
         locked = true
         lockedAfterAction = false
+        repeating = false
         anchorX = currentX
         anchorY = currentY
         anchorKey = currentKey
@@ -178,6 +194,7 @@ class DwellMachine(
     internal fun lockAfterAction() {
         locked = true
         lockedAfterAction = true
+        repeating = false
         anchorX = currentX
         anchorY = currentY
         anchorKey = currentKey
@@ -185,13 +202,15 @@ class DwellMachine(
 
     /**
      * Restart the countdown at the same anchor without requiring movement, for
-     * repeating actions (scroll): the next dwell period fires again if the
-     * pointer keeps resting. Movement re-anchors as usual.
+     * repeating actions (scroll): it fires again after the repeat interval if
+     * the pointer keeps resting, and again after each. Movement re-anchors as
+     * usual, and a countdown started by movement waits the full dwell time.
      */
     fun rearmInPlace(nowMs: Long) {
         restStart = nowMs
         locked = false
         lockedAfterAction = false
+        repeating = true
     }
 
     /**
@@ -221,7 +240,10 @@ class DwellMachine(
         // (the fuzz target drives both). The clamp on the divisor keeps progress
         // finite for any dwell time.
         val elapsed = elapsedSince(restStart, nowMs)
-        val progress = (elapsed.toFloat() / dwellTimeMs).coerceIn(0f, 1f)
+        // A countdown re-armed in place runs for the repeat interval; every
+        // other countdown (the decision) for the full dwell time.
+        val period = if (repeating) repeatIntervalMs else dwellTimeMs
+        val progress = (elapsed.toFloat() / period).coerceIn(0f, 1f)
         if (progress >= 1f) {
             lockAfterAction()
             return Poll(0f, clicked = true, x = currentX, y = currentY)
@@ -236,6 +258,7 @@ class DwellMachine(
         restStart = nowMs
         locked = false
         lockedAfterAction = false
+        repeating = false // a new spot is a new decision: full dwell time
     }
 
     companion object {
