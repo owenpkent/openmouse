@@ -52,14 +52,85 @@ Safety answers are in [`docs/play/`](play/README.md).
       reach a lot for an accessibility tool.
 - [ ] **Target API**: keep `targetSdk` current (Play enforces a floor).
 
-## Release process
+## Signed release tags
 
-1. Cut a signed APK/AAB from a tagged commit; attach the APK to a GitHub Release.
-2. Play: roll through **internal → closed → open** testing tracks before
+A release is a tag `vX.Y.Z` on `main`, signed by the owner with an SSH key
+listed in [`release-signers`](../release-signers) at the repository root.
+Nothing else marks a commit as "meant to run": F-Droid builds the commit the tag
+names (`UpdateCheckMode: Tags` in the metadata), the GitHub Release is created
+for the tag, and `scripts/verify-release-tag.sh` is what anyone, the publish
+script included, runs before trusting one.
+
+A tag verifies when it is an annotated tag named for itself, carries a message
+(the message is the release notes), and carries exactly one SSH signature from a
+key in `release-signers`. `git verify-tag` is pointed at that file alone, so a
+key that is merely in the owner's git configuration does not count.
+
+### One-time key setup
+
+Done once, by the owner, on the machine releases are made from. The key may be
+the same one that signs the owner's other projects; `release-signers` carries
+the Polaris release key for that reason.
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/openmouse-release -C openmouse-release
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/openmouse-release.pub
+printf 'openmouse-release namespaces="git" %s\n' "$(cut -d' ' -f1,2 ~/.ssh/openmouse-release.pub)" >> release-signers
+git add release-signers && git commit -m "chore(release): allow the release key"
+```
+
+Check that signing and verifying work before the first release:
+
+```sh
+git tag -s test-signing -m "test"
+scripts/verify-release-tag.sh test-signing   # fails on the name; that is expected
+git -c gpg.ssh.allowedSignersFile=release-signers verify-tag test-signing
+git tag -d test-signing
+```
+
+## Release checklist
+
+Releases are batched: one is cut when there is something worth installing, not
+for every merged pull request, because each needs the owner's signature.
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, add the
+   `## [X.Y.Z]` entry to CHANGELOG.md (move the Unreleased notes under it), write
+   `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` (500
+   characters at most), and update `CurrentVersion`, `CurrentVersionCode` and
+   the `Builds` entry in `docs/fdroid/io.github.owenpkent.openmouse.yml`.
+   `ReleaseMetadataTest` (part of `./gradlew test`) fails when any of these
+   disagree, so CI catches a half-done bump.
+2. Merge, and wait for the `Tests` run on that commit on `main` to pass.
+3. From a clean checkout of that commit, tag and sign, with the notes as the
+   tag message. Keep the notes in a file so a failed attempt costs only a retry:
+
+   ```sh
+   git tag -s v0.2.0 -F notes.txt
+   scripts/verify-release-tag.sh v0.2.0
+   git push origin v0.2.0
+   ```
+
+4. Build and publish from the tag (needs `keystore.properties` for the signing
+   key, `gh` logged in, and Git for Windows for `sh`):
+
+   ```powershell
+   git checkout v0.2.0
+   pwsh -File scripts\publish-release.ps1          # add -Draft to read it over first
+   ```
+
+   The script refuses a dirty tree, a HEAD that is not the tag, a tag that does
+   not verify, or a missing keystore. It writes `dist/openmouse-v0.2.0.apk` and
+   its SHA-256, and creates the GitHub Release with the tag message as notes.
+   The in-app updater looks for the `openmouse-*.apk` asset of the latest
+   release, and Android installs it only over an app signed with the same key,
+   so the keystore must be the one that signed what users have.
+5. Play: roll through **internal → closed → open** testing tracks before
    production. Recruit real testers (see below) on the closed track.
-3. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
+6. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
    The ready-to-submit metadata and step-by-step notes are in
-   [`docs/fdroid/`](fdroid/README.md).
+   [`docs/fdroid/`](fdroid/README.md). After the first submission, F-Droid picks
+   up each new tag on its own.
 
 ## After launch
 
