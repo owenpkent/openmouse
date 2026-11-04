@@ -30,6 +30,13 @@ tagged release.
   clears the ring, reset locks, timestamps older than the anchor, negative and
   NaN settings), on JUnit 5.
 
+### Changed
+
+- The dwell ticker runs only while a countdown is in progress. Locked after a
+  click, paused over the app, or with a mouse button held, the service no
+  longer wakes up every 16 ms for nothing; a pointer move or a scroll re-arm
+  starts it again. Less battery for the same behaviour.
+
 ### Fixed
 
 - A mouse button held by the user suppresses dwell clicking for the whole hold,

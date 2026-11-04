@@ -6,8 +6,9 @@ import android.os.SystemClock
 
 /**
  * Android wrapper around [DwellMachine]. It drives the machine from a 16 ms timer
- * using `SystemClock.uptimeMillis()`, reports countdown progress to [onProgress],
- * and fires [onClick] when a dwell completes.
+ * using `SystemClock.uptimeMillis()`, but only while a countdown is running
+ * ([DwellMachine.isCountingDown]); an idle machine costs no wake-ups. It reports
+ * countdown progress to [onProgress], and fires [onClick] when a dwell completes.
  *
  * All the decision logic lives in [DwellMachine] (which is unit tested); this
  * class only owns the timer and the clock.
@@ -23,13 +24,37 @@ class DwellClicker(
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
 
+    // The ticker runs only while the machine is counting down. Most of the time
+    // (pointer moving, locked after a click, paused, a button held) time alone
+    // changes nothing, and a 16 ms wake-up for nothing costs battery.
+    private var ticking = false
+
     private val tick = object : Runnable {
         override fun run() {
-            if (!running) return
+            if (!running) {
+                ticking = false
+                return
+            }
             val poll = machine.poll(SystemClock.uptimeMillis())
             onProgress(poll.progress)
             if (poll.clicked) onClick(poll.x, poll.y)
-            handler.postDelayed(this, TICK_INTERVAL_MS)
+            // Decide after the callback: a scroll re-arms in place from inside
+            // onClick (ensureTicking sees the flag still set and posts nothing),
+            // while a click locks and the ticker simply stops.
+            if (machine.isCountingDown) {
+                handler.postDelayed(this, TICK_INTERVAL_MS)
+            } else {
+                ticking = false
+            }
+        }
+    }
+
+    // Start the ticker if a countdown is running and it is not already going.
+    // Called after every machine call that can arm it.
+    private fun ensureTicking() {
+        if (running && !ticking && machine.isCountingDown) {
+            ticking = true
+            handler.post(tick)
         }
     }
 
@@ -37,11 +62,12 @@ class DwellClicker(
         if (running) return
         running = true
         machine.reset(SystemClock.uptimeMillis())
-        handler.post(tick)
+        ensureTicking() // reset locks, so nothing ticks until the pointer moves
     }
 
     fun stop() {
         running = false
+        ticking = false
         handler.removeCallbacks(tick)
         onProgress(0f)
     }
@@ -64,6 +90,7 @@ class DwellClicker(
      */
     fun rearmInPlace() {
         machine.rearmInPlace(SystemClock.uptimeMillis())
+        ensureTicking()
     }
 
     /** Pause or resume dwelling on the app. The menu keeps working while paused. */
@@ -91,6 +118,7 @@ class DwellClicker(
      */
     fun onCursorMoved(x: Float, y: Float, restKey: Any? = null) {
         machine.onMove(x, y, SystemClock.uptimeMillis(), restKey)
+        ensureTicking() // a move is the one thing that arms a locked machine
     }
 
     /** Update dwell timing live (from a settings change). */
