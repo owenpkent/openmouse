@@ -9,6 +9,11 @@ tagged release.
 
 ### Added
 
+- An action badge beside the cross-hair names the current mode (double-tap,
+  hold, drag, swipe, scroll up or down) whenever it is not a plain tap, so a
+  sticky scroll or a drag waiting for its end point is visible where you are
+  looking, not only on the menu at the screen edge. It sits up and to the left
+  of the cross-hair and flips to the other side near an edge.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in

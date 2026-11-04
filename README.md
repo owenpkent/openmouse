@@ -83,7 +83,8 @@ two input-capture paths and how injected gestures reach the app below.
 - Scroll wheel scrolls the content under the cursor
 - On-screen gesture menu (collapsible grid, left or right edge, widens on short
   screens so every entry stays reachable)
-- Tap modes: single tap, double-tap, long-press
+- Tap modes: single tap, double-tap, long-press. A badge beside the cross-hair
+  names the active mode whenever it is not a plain tap
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
 - Navigation from the menu: Back, Home, Recent, Notifications, Quick Settings

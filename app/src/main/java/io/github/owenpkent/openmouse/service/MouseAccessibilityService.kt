@@ -316,6 +316,18 @@ class MouseAccessibilityService : AccessibilityService() {
         }
         // Any menu choice cancels a half-started two-point gesture.
         clearPending()
+        syncBadge()
+    }
+
+    /**
+     * The badge beside the cross-hair names the current mode whenever it is not
+     * a plain tap, so a sticky scroll or a drag waiting for its end point is
+     * visible where the user is looking, not only on the menu at the edge.
+     */
+    private fun syncBadge() {
+        val menu = gestureMenu
+        val mode = menu?.currentMode ?: GestureAction.TAP
+        cursorView?.setBadge(if (mode == GestureAction.TAP) null else menu?.labelFor(mode))
     }
 
     /**
@@ -396,6 +408,7 @@ class MouseAccessibilityService : AccessibilityService() {
 
     private fun resetToTap() {
         gestureMenu?.currentMode = GestureAction.TAP
+        syncBadge()
     }
 
     private fun clearPending() {

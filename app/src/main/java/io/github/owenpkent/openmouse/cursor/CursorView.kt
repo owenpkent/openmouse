@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.PointerIcon
@@ -105,6 +106,28 @@ class CursorView(context: Context) : View(context) {
         color = ContextCompat.getColor(context, R.color.cursor_pending)
     }
 
+    // The action badge: a pill naming the current mode whenever it is not a
+    // plain tap, drawn beside the cross-hair so a sticky scroll or the second
+    // half of a drag is visible where the user is looking, not only on the menu
+    // at the screen edge. Same colors as a selected menu entry, so it reads as
+    // "this entry is active". Unscaled: it is a label, not part of the cursor.
+    private var badge: String? = null
+    private val badgeHeight = 28f * d
+    private val badgePadX = 10f * d
+    private val badgeGap = 6f * d // between the arm tip and the pill
+    private val badgeRadius = 8f * d
+    private val badgeRect = RectF()
+    private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = ContextCompat.getColor(context, R.color.menu_item_selected)
+    }
+    private val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.menu_text)
+        textAlign = Paint.Align.CENTER
+        textSize = 14f * d
+        isFakeBoldText = true
+    }
+
     /** Move the cursor without a pointer event (e.g. driven by the service). */
     fun setCursorPosition(x: Float, y: Float) {
         if (x == cursorX && y == cursorY) return
@@ -152,6 +175,17 @@ class CursorView(context: Context) : View(context) {
         invalidate()
     }
 
+    /**
+     * Show [text] in the action badge beside the cross-hair, or hide the badge
+     * (null). The service passes the menu label of the current mode, and null
+     * for a plain tap.
+     */
+    fun setBadge(text: String?) {
+        if (text == badge) return
+        badge = text
+        invalidate()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         gestureMenu?.updateLayout(w, h)
@@ -186,6 +220,24 @@ class CursorView(context: Context) : View(context) {
         drawArms(canvas, outlinePaint)
         drawArms(canvas, fillPaint)
         canvas.drawCircle(cursorX, cursorY, dotRadius, dotPaint)
+
+        badge?.let { drawBadge(canvas, it) }
+    }
+
+    private fun drawBadge(canvas: Canvas, text: String) {
+        val w = badgeTextPaint.measureText(text) + 2f * badgePadX
+        val b = BadgePlacement.place(
+            cursorX, cursorY,
+            offset = armLength + badgeGap,
+            width = w,
+            height = badgeHeight,
+            viewWidth = width.toFloat(),
+            viewHeight = height.toFloat(),
+        )
+        badgeRect.set(b.left, b.top, b.right, b.bottom)
+        canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgePaint)
+        val baseline = badgeRect.centerY() - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
+        canvas.drawText(text, badgeRect.centerX(), baseline, badgeTextPaint)
     }
 
     private fun drawArms(canvas: Canvas, paint: Paint) {

@@ -127,6 +127,13 @@ class GestureMenu(context: Context) {
         geometry.layout(lastWidth, lastHeight, expanded, dockRight)
     }
 
+    /**
+     * The label the menu shows for [action], for the badge beside the cross-hair
+     * (so the badge and the menu always agree on the name of a mode). Null for
+     * the toggle, which has no label.
+     */
+    fun labelFor(action: GestureAction): String? = items.firstOrNull { it.action == action }?.label
+
     /** Which menu entry (if any) sits under [x], [y]. */
     fun hitTest(x: Float, y: Float): GestureAction? {
         val index = geometry.hitTest(x, y, expanded) ?: return null
