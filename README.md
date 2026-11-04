@@ -26,6 +26,11 @@ with or endorsed by Ease Apps.
 - **F-Droid** and **Google Play**: planned; the metadata and submission guides are
   ready (see [docs/RELEASING.md](docs/RELEASING.md)).
 
+Once installed, OpenMouse can check GitHub Releases for a newer version from
+Settings > Updates (off by default: press **Check for updates now**, or turn on
+the launch check). It only installs an APK signed with the same key as the copy
+already on the device, and the system installer asks before anything changes.
+
 Then open OpenMouse, enable **OpenMouse cursor** in Accessibility settings, and
 plug in a mouse (details under [Enabling](#enabling-openmouse-on-a-device)).
 
@@ -99,6 +104,7 @@ two input-capture paths and how injected gestures reach the app below.
   and a dwell-click on/off toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
+- Optional update check against GitHub Releases (off by default; Settings)
 
 **Roadmap** (mirrors the original's feature set)
 
@@ -150,13 +156,16 @@ app/src/main/
 │   ├── menu/GestureMenu.kt             menu: drawing + action mapping
 │   ├── menu/MenuGeometry.kt            pure layout + hit-testing (unit tested)
 │   ├── settings/OpenMouseSettings.kt   SharedPreferences-backed settings
-│   └── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
+│   ├── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
+│   ├── update/ReleaseFeed.kt           pure release parsing + URL allow-list (unit tested)
+│   └── update/UpdateChecker.kt         GitHub fetch, signature check, installer hand-off
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml
 
 app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests (JUnit 5)
 ├── click/DwellMachineTest.kt
 ├── menu/MenuGeometryTest.kt
+├── update/ReleaseFeedTest.kt
 └── fuzz/                            Jazzer fuzz targets (run nightly)
     ├── DwellMachineFuzzTest.kt
     └── MenuGeometryFuzzTest.kt

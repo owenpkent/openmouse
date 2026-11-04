@@ -35,6 +35,27 @@
     <string name="settings_scroll_repeat_value">Scroll repeat interval:   %1$d ms</string>
     <string name="settings_size_value">Cursor size:   %1$d%%</string>
 
+    <!-- Updates section (compiled out when BuildConfig.UPDATER_ENABLED is false) -->
+    <string name="settings_updates">Updates</string>
+    <string name="settings_update_check_on_launch">Check for updates when OpenMouse opens</string>
+    <string name="settings_update_check_now">Check for updates now</string>
+    <string name="update_status_checking">Checking…</string>
+    <string name="update_status_up_to_date">You have the latest version (%1$s)</string>
+    <string name="update_status_available">Version %1$s is available</string>
+    <string name="update_status_downloading">Downloading… %1$d%%</string>
+    <string name="update_status_installing">Opening the installer…</string>
+    <string name="update_status_failed">Could not check for updates: %1$s</string>
+    <string name="update_status_signature_mismatch">The downloaded file is not signed by the same key as this app; not installing</string>
+    <string name="update_status_allow_installs">Allow OpenMouse to install updates, then try again</string>
+    <string name="update_error_no_release">no release found</string>
+    <string name="update_error_untrusted_url">the download is not hosted on GitHub</string>
+    <string name="update_error_too_large">the download is too large</string>
+    <string name="update_error_size_mismatch">the download was incomplete</string>
+    <string name="update_dialog_title">OpenMouse %1$s is available</string>
+    <string name="update_dialog_no_notes">No release notes.</string>
+    <string name="update_dialog_install">Download and install</string>
+    <string name="update_dialog_not_now">Not now</string>
+
     <string-array name="cursor_color_names">
         <item>Yellow</item>
         <item>Green</item>

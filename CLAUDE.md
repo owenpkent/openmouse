@@ -15,8 +15,8 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 ## Stack & layout
 
 - Kotlin Android AccessibilityService. AGP 9.0.1 (built-in Kotlin, no separate plugin), Gradle wrapper 9.2.1, JDK 17, min/target/compile SDK 24/36/36, namespace `io.github.owenpkent.openmouse`. Deps via `gradle/libs.versions.toml`.
-- `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`.
-- `app/src/test/java/.../{click,menu}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
+- `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`, `update/` (the GitHub Releases update check: pure `ReleaseFeed` + Android `UpdateChecker`/`UpdatePrompt`, gated on `BuildConfig.UPDATER_ENABLED`, which `-PopenmouseUpdater=false` turns off for F-Droid).
+- `app/src/test/java/.../{click,menu,update}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`, `ReleaseFeedTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
 - `docs/ARCHITECTURE.md` - read first. `platform/` + `Android.bp` - AOSP/LineageOS system-app build (not day-to-day, unvalidated). `fastlane/` - F-Droid/Play metadata.
 
 ## Build, run, test
@@ -34,5 +34,5 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 
 ## When to ask
 
-- Anything widening the trust surface: new permissions, capturing or persisting input, network calls, or collecting user data (OpenMouse stores only local settings and collects nothing). Report suspected tapjacking/injection abuse privately via SECURITY.md, not a public issue.
+- Anything widening the trust surface: new permissions, capturing or persisting input, network calls, or collecting user data (OpenMouse stores only local settings and collects nothing). The updater (`update/`) is the one network path and must stay that way: opt-in (launch check off by default, otherwise only on the user's button press), GitHub-only (`api.github.com` for the feed, `github.com` + `*.githubusercontent.com` for the APK, enforced by `ReleaseFeed`'s allow-lists), same-signing-key or refuse, and compiled out with `-PopenmouseUpdater=false`. Do not add hosts, background checks or identifiers to it without asking. Report suspected tapjacking/injection abuse privately via SECURITY.md, not a public issue.
 - Public-facing changes: `applicationId`, `versionName`/`versionCode`, min/target SDK, `res/xml/accessibility_service_config.xml`, or F-Droid/Play metadata under `fastlane/`.

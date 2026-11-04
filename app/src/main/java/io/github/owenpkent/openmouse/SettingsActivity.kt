@@ -3,6 +3,7 @@ package io.github.owenpkent.openmouse
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
+import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -10,6 +11,8 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import io.github.owenpkent.openmouse.settings.OpenMouseSettings
+import io.github.owenpkent.openmouse.update.UpdateChecker
+import io.github.owenpkent.openmouse.update.UpdatePrompt
 
 /**
  * Settings screen. Every control writes straight to [OpenMouseSettings] on
@@ -31,6 +34,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var repeatLabel: TextView
     private lateinit var sizeLabel: TextView
 
+    private var updateChecker: UpdateChecker? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -46,6 +51,7 @@ class SettingsActivity : AppCompatActivity() {
         setupSliders()
         setupColors()
         setupMenuSide()
+        setupUpdates()
     }
 
     private fun setupDwellToggle() {
@@ -133,6 +139,46 @@ class SettingsActivity : AppCompatActivity() {
         group.setOnCheckedChangeListener { _, checkedId ->
             val index = colorButtons.indexOfFirst { it.id == checkedId }
             if (index >= 0) settings.cursorColorIndex = index
+        }
+    }
+
+    /**
+     * The Updates section is the app's only network feature. It is opt-in (the
+     * launch check defaults to off; the button acts only when pressed) and
+     * disappears entirely from builds that compile the updater out.
+     */
+    private fun setupUpdates() {
+        val section = findViewById<View>(R.id.updatesSection)
+        if (!BuildConfig.UPDATER_ENABLED) {
+            section.visibility = View.GONE
+            return
+        }
+        val checker = UpdateChecker(this)
+        updateChecker = checker
+        val status = findViewById<TextView>(R.id.updateStatus)
+
+        val toggle = findViewById<SwitchMaterial>(R.id.updateCheckOnLaunchSwitch)
+        toggle.isChecked = settings.updateCheckOnLaunch
+        toggle.setOnCheckedChangeListener { _, checked -> settings.updateCheckOnLaunch = checked }
+
+        val button = findViewById<Button>(R.id.checkForUpdatesButton)
+        button.setOnClickListener {
+            button.isEnabled = false
+            status.text = getString(R.string.update_status_checking)
+            checker.check { result ->
+                if (isFinishing || isDestroyed) return@check
+                button.isEnabled = true
+                when (result) {
+                    is UpdateChecker.Result.UpToDate ->
+                        status.text = getString(R.string.update_status_up_to_date, result.current)
+                    is UpdateChecker.Result.Failed ->
+                        status.text = getString(R.string.update_status_failed, result.message)
+                    is UpdateChecker.Result.Available -> {
+                        status.text = getString(R.string.update_status_available, result.release.version)
+                        UpdatePrompt.show(this, checker, result.release) { status.text = it }
+                    }
+                }
+            }
         }
     }
 
