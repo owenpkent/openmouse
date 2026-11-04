@@ -30,7 +30,7 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 ## Conventions
 
 - Kotlin official style (`kotlin.code.style=official`, ktlint defaults). Comment the *why*, not the *what*; match surrounding code.
-- Add a gesture via the recipe in CONTRIBUTING.md: extend `GestureAction` -> add a string + `GestureMenu` `items` row -> add the injection method to `GestureDispatcher` -> handle it in `MouseAccessibilityService.performMode()` (decide one-shot vs sticky vs repeating via `GestureAction.isRepeating`; two-point gestures use the `pendingX/pendingY` start-point flow) -> dispatch via `runGesture` -> unit-test any extracted pure logic.
+- Add a gesture via the recipe in CONTRIBUTING.md: extend `GestureAction` -> add a string + `GestureMenu` `items` row -> add the injection method to `GestureDispatcher` -> handle it in `MouseAccessibilityService.performMode()` (the badge beside the cross-hair follows `currentMode` through `syncBadge()`, so a new mode needs nothing extra there) (decide one-shot vs sticky vs repeating via `GestureAction.isRepeating`; two-point gestures use the `pendingX/pendingY` start-point flow) -> dispatch via `runGesture` -> unit-test any extracted pure logic.
 
 ## When to ask
 

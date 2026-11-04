@@ -158,8 +158,13 @@ entry.
 The menu is **not a real View hierarchy**. `CursorView` owns every pointer
 event, so a separate touchable button strip underneath it would never receive
 hover. Instead the menu is pure data: `CursorView` draws it, and the service
-hit-tests the cursor position against it. Both the dwell timer and a physical
-left-click funnel into one method:
+hit-tests the cursor position against it. Whenever the current mode is not a
+plain tap, `CursorView` also draws an **action badge**, a pill with the mode's
+menu label, up and to the left of the cross-hair (flipping to the other side
+near an edge; the pure `BadgePlacement` decides where), so a sticky scroll or a
+drag waiting for its end point is visible where the user is looking, not only
+on the menu at the screen edge. Both the dwell timer and a physical left-click
+funnel into one method:
 
 ```
 handlePrimaryAction(x, y, fromDwell):
