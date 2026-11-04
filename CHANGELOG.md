@@ -23,6 +23,10 @@ tagged release.
   only on an advisory it introduces (with a weekly full scan and a self-test
   that plants a known-vulnerable artifact behind result-file symlinks), CodeQL
   for the Kotlin code, and Dependabot for Gradle and GitHub Actions.
+- The nightly fuzz run fuzzes each target in its own job from a corpus cached
+  between nights, and a finding opens (or comments on) a `Fuzz crash: <target>`
+  issue with the input, where it goes, and the end of the log, instead of
+  leaving an artifact nobody is told about.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in
