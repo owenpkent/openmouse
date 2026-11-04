@@ -21,6 +21,11 @@ gestures.
    JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'
    ```
    CI runs the full ten-minute fuzz nightly (`.github/workflows/nightly-fuzz.yml`).
+4. Turn on the pre-push hook, which runs the unit tests and lint before every
+   push (the same checks as the CI fast job):
+   ```bash
+   ./gradlew installGitHooks      # or: git config core.hooksPath .githooks
+   ```
 
 To try a change on hardware: install the debug APK, plug in a mouse (USB OTG or
 Bluetooth), and enable **OpenMouse cursor** in Accessibility settings.
@@ -63,13 +68,31 @@ Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first. The short version:
 (see `DwellMachine`, `MenuGeometry`) so it can be unit tested on the JVM. The
 Android wrapper should be a thin pass-through.
 
+## Gates
+
+Every check that can stop a change, what triggers it, and what to do when it
+fails. The plan for the gates still to come is in [`docs/PARITY.md`](docs/PARITY.md).
+
+| Gate | Runs | When it fails |
+| --- | --- | --- |
+| Pre-push hook (`.githooks/pre-push`) | Before each `git push`: `./gradlew testDebugUnitTest lintDebug`, the same as the CI fast job. `./gradlew installGitHooks` turns it on. | Read the tail it prints (full log in `.git/pre-push.log`), fix the cause, push again. Never `--no-verify`. |
+| `Tests` (`ci.yml`) | Every pull request and every push to `main`. One required check that needs both jobs below and fails if either did not succeed. | Open the job that is red in the run. |
+| Build, unit tests, lint | The debug APK, the JVM unit tests (the fuzz targets replay their seed corpus here), and `lintDebug`. | Reproduce with `./gradlew testDebugUnitTest lintDebug`. |
+| Release build and lint (unsigned) | `assembleRelease` and `lintRelease`: minified and shrunk, the way a release ships, so a ProGuard or resource problem fails here and not at release time. The unsigned APK is kept a week. | Reproduce with `./gradlew assembleRelease lintRelease`. CI has no keystore, so the APK is unsigned; signing is never done in CI. |
+| `Reviewed` (`review-gate.yml`) | Every pull request into `main`, again on each push and each review. A commit status set on the head commit: success when a review with a summary was submitted on it and the newest one does not request changes. A reply to an inline comment does not count. A push leaves the new commit with no status until it is reviewed. | Get the pull request reviewed on its latest commit; after a push, review again. The workflow's own job, `Set the Reviewed status`, succeeds whatever it decides and fails only when it cannot read the reviews or write the status; then re-run it. |
+| Nightly fuzz (`nightly-fuzz.yml`) | 03:17 UTC daily, and on demand: each Jazzer target fuzzes for ten minutes. Not a pull request check. | Download the `fuzz-findings` artifact, replay the input with `./gradlew test` (the file goes under `app/src/test/resources/**/*FuzzTestInputs/`), fix the bug, and commit the input as a permanent regression test. Do not weaken the invariants in the target. |
+
+Branch protection on `main` requires `Tests`, the `Reviewed` status, and the
+`Set the Reviewed status` check, and applies to admins too.
+
 ## Coding conventions
 
 - Kotlin, official code style (`kotlin.code.style=official`, enforced by ktlint
   defaults in Android Studio).
 - Match the surrounding code: comment the *why*, not the *what*.
 - No em dashes in code, comments, or docs. Use a period, a colon, or parentheses.
-- Run `./gradlew test lint` before opening a PR.
+- Run `./gradlew test lint` before opening a PR (the pre-push hook runs the
+  unit tests and debug lint for you).
 
 ## How to add a new gesture
 

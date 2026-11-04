@@ -9,6 +9,15 @@ tagged release.
 
 ### Added
 
+- Engineering gates, the first step of the parity plan in `docs/PARITY.md`:
+  CI actions pinned to a commit with credentials dropped after checkout,
+  concurrency groups, an unsigned release build plus `lintRelease` so a
+  release-only break fails in CI, and one aggregate `Tests` check for branch
+  protection. A `Reviewed` commit status (`review-gate.yml`) requires a review
+  on the latest commit of every pull request into `main`. A tracked pre-push
+  hook runs the unit tests and lint before every push (`./gradlew
+  installGitHooks` turns it on), and CONTRIBUTING.md gained a table of every
+  gate and what to do when it fails.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in
