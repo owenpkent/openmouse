@@ -35,6 +35,12 @@ class CursorView(context: Context) : View(context) {
     /** Called on a scroll-wheel turn: (x, y, vscroll) where vscroll > 0 is wheel-up. */
     var onScroll: ((Float, Float, Float) -> Unit)? = null
 
+    /**
+     * Whether any mouse button is down after the event just reported, called on
+     * every mouse event. The service keeps dwelling suppressed while one is.
+     */
+    var onButtonsChanged: ((Boolean) -> Unit)? = null
+
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
 
@@ -254,7 +260,14 @@ class CursorView(context: Context) : View(context) {
     private fun report(event: MotionEvent) {
         cursorX = event.x
         cursorY = event.y
+        // A press is reported before the position, so a move with a button
+        // held is seen as held when the dwell machine receives it; a release is
+        // reported after, so the lock it leaves anchors on what the pointer is
+        // over when the button comes up (the same order as the API 34+ path).
+        val held = event.buttonState != 0
+        if (held) onButtonsChanged?.invoke(true)
         onMove?.invoke(cursorX, cursorY)
+        if (!held) onButtonsChanged?.invoke(false)
         invalidate()
     }
 

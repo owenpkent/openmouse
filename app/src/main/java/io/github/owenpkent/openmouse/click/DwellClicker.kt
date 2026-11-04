@@ -75,6 +75,16 @@ class DwellClicker(
     val isPaused: Boolean get() = machine.isPaused
 
     /**
+     * Report whether any mouse button is down, on every pointer event. While one
+     * is, dwelling is suppressed (the user's own drag or selection must never be
+     * cut short); the release locks until the pointer moves. Cheap to call
+     * repeatedly: only a change touches the machine or the ring.
+     */
+    fun setButtonHeld(held: Boolean) {
+        if (machine.setExternalButtonHeld(held)) onProgress(0f)
+    }
+
+    /**
      * Feed a new cursor position in screen coordinates. [restKey] names the
      * target under the cursor (the menu entry, or null over the app); see
      * [DwellMachine.onMove].

@@ -521,6 +521,102 @@ class DwellMachineTest {
     }
 
     @Nested
+    inner class ExternalButtonHold {
+
+        @Test
+        fun aHeldButtonSuppressesDwellingHoweverThePointerMoves() {
+            val m = machine()
+            arm(m)
+            m.poll(50L) // countdown half spent
+
+            assertTrue(m.setExternalButtonHeld(true)) // the user's own press
+            assertFalse(m.poll(100L).clicked)
+            m.onMove(300f, 300f, 100L) // the user drags
+            assertFalse(m.poll(1000L).clicked)
+            assertEquals(0f, m.poll(1000L).progress, EPS)
+            m.onMove(500f, 500f, 1000L) // and keeps dragging
+            assertFalse(m.poll(10_000L).clicked)
+            assertTrue(m.isExternalButtonHeld)
+        }
+
+        @Test
+        fun lettingGoLocksUntilThePointerMoves() {
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true)
+            m.onMove(300f, 300f, 10L)
+
+            assertTrue(m.setExternalButtonHeld(false))
+            // The rest where the button came up is not a click.
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(305f, 300f, 10_000L) // 5 px: still parked
+            assertFalse(m.poll(20_000L).clicked)
+            m.onMove(320f, 300f, 20_000L) // 20 px: deliberate
+            assertTrue(m.poll(20_100L).clicked)
+        }
+
+        @Test
+        fun aRedundantCallDoesNotDisturbARunningCountdown() {
+            // The service reports the button state on every pointer event, so
+            // "still up" must be free of side effects.
+            val m = machine()
+            arm(m)
+            m.poll(50L)
+            assertFalse(m.setExternalButtonHeld(false))
+            assertEquals(0.75f, m.poll(75L).progress, EPS)
+            assertTrue(m.poll(100L).clicked)
+        }
+
+        @Test
+        fun aHoldStopsARepeatingScroll() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+
+            m.setExternalButtonHeld(true)
+            assertFalse(m.poll(200L).clicked)
+            m.rearmInPlace(200L) // a re-arm asked for during the hold is refused
+            assertFalse(m.poll(300L).clicked)
+            m.setExternalButtonHeld(false)
+            assertFalse(m.poll(400L).clicked) // and the release locks until move
+        }
+
+        @Test
+        fun aHoldOnAMenuEntryDoesNotFireIt() {
+            val m = machine()
+            m.reset(0L)
+            m.setExternalButtonHeld(true)
+            m.onMove(100f, 100f, 0L, restKey = "cell")
+            assertFalse(m.poll(1000L).clicked)
+
+            m.setExternalButtonHeld(false)
+            assertFalse(m.poll(2000L).clicked) // parked on the entry: locked
+            m.onMove(100f, 100f, 2000L, restKey = "other") // entering another entry arms
+            assertTrue(m.poll(2100L).clicked)
+        }
+
+        @Test
+        fun aReleaseThatLandsOnAMenuEntryDoesNotArmIt() {
+            // The service feeds the release position while the machine still
+            // reads held, then the release, so the lock the release leaves
+            // anchors on the entry under the pointer. Reported the other way
+            // round, the release would lock on the old key and the move onto
+            // the new entry would arm it.
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true) // pressed on the app
+            m.onMove(300f, 300f, 10L, restKey = "back") // dragged onto Back, still held
+            m.setExternalButtonHeld(false) // let go on Back
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(301f, 300f, 10_000L, restKey = "back") // a tremor on the same entry
+            assertFalse(m.poll(20_000L).clicked)
+            m.onMove(300f, 300f, 20_000L, restKey = "home") // a different entry arms
+            assertTrue(m.poll(20_100L).clicked)
+        }
+    }
+
+    @Nested
     inner class PauseAndSuppression {
 
         @Test

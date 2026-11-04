@@ -98,6 +98,11 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   countdown is no longer aimed at what the user chose), on pause, after any live
   settings change, and when the ticker restarts. A lock is cleared only by
   deliberate pointer movement; no amount of elapsed time will.
+- **A held button suppresses dwelling.** The service reports the button state
+  on every pointer event (`buttonState != 0`), and while any button is down the
+  machine stays locked whatever the pointer does: a dwell must never cut short
+  the user's own drag or selection. Letting go locks until the pointer moves, so
+  the spot where the button came up is not clicked by the rest that follows.
 - **Two tolerances.** The movement tolerance is the jitter a running countdown
   survives; drift within it leaves the countdown alone, which is what lets a hand
   with a tremor complete a dwell at all. The re-arm distance is how far the
