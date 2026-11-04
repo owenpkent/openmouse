@@ -343,6 +343,12 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     private fun handleScroll(x: Float, y: Float, vscroll: Float) {
+        // The user scrolled for themselves, so the content under a resting
+        // pointer has changed and a running countdown is no longer aimed at what
+        // they chose. Lock until the pointer moves, the same rule as a physical
+        // click. (A scroll injected by a dwell is a gesture, not a wheel event,
+        // so a repeating scroll mode never locks itself here.)
+        dwellClicker?.lockUntilMove()
         val dispatcher = gestureDispatcher ?: return
         // Wheel-up (vscroll > 0) reveals content above.
         runGesture { done -> dispatcher.scroll(x, y, revealAbove = vscroll > 0f, done) }

@@ -29,6 +29,10 @@ tagged release.
 
 ### Fixed
 
+- Turning the scroll wheel cancels a running dwell countdown and locks until the
+  pointer moves. The content under a resting pointer has changed, so the
+  countdown was no longer aimed at what the user chose (the PowerToys Dwell
+  Click wheel rule).
 - Menu entries no longer re-fire while the pointer stays on them. A tremor
   inside a cell used to restart the countdown and could trigger Back or the
   menu toggle every dwell period; the cell is now the tolerance, and an entry

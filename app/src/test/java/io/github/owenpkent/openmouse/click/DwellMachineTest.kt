@@ -216,6 +216,25 @@ class DwellMachineTest {
         }
 
         @Test
+        fun aWheelTurnCancelsTheRunningCountdown() {
+            // The content scrolled under the resting pointer, so the countdown
+            // is no longer aimed at what the user chose. The service locks with
+            // the ordinary tolerance (not the post-action distance): the user
+            // did not click, so recovering must not need an exaggerated move.
+            val m = machine()
+            arm(m)
+            m.poll(90L) // almost there
+
+            m.lockUntilMove() // the wheel turned
+            assertFalse(m.poll(100L).clicked)
+            assertEquals(0f, m.poll(100L).progress, EPS)
+            assertFalse(m.poll(100_000L).clicked)
+
+            m.onMove(111f, 100f, 100_000L) // 11 px: the ordinary tolerance re-arms
+            assertTrue(m.poll(100_100L).clicked)
+        }
+
+        @Test
         fun driftWithinToleranceDoesNotClearALock() {
             val m = machine()
             arm(m)

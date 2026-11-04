@@ -15,7 +15,9 @@ import kotlin.math.hypot
  * rules these mirror):
  *
  * - It starts **locked**, and re-locks after every click, after a physical click
- *   ([lockUntilMove]), on pause, after a live settings change, and on [reset].
+ *   or a wheel turn ([lockUntilMove]: the user acted for themselves, or the
+ *   content under the resting pointer changed), on pause, after a live settings
+ *   change, and on [reset].
  *   A lock is cleared only by deliberate pointer movement; no amount of elapsed
  *   time will.
  * - **Two tolerances.** [moveThresholdPx] is the jitter a running countdown
