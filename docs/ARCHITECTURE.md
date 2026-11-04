@@ -130,6 +130,11 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   service also refuses a dwell that reaches `handlePrimaryAction` over the app
   while paused, so a rest key that went stale between pointer events can never
   tap the app; physical clicks are unaffected.
+- **The ring waits, the click does not.** The countdown ring stays hidden for
+  the first fifth of a countdown, at most 250 ms (`Poll.ringProgress`). Once the
+  machine is armed every brief pause in ordinary movement starts a countdown,
+  and a ring drawn from the first poll trailed a pointer that had merely slowed
+  down. The dwell itself fires exactly when it always did.
 - **Scroll repeats in place.** After a scroll dwell the service re-arms the
   machine at the same anchor instead of waiting for movement. Only the first
   notch at a rest point waits the full dwell time, because that one is the

@@ -36,6 +36,9 @@ tagged release.
   click, paused over the app, or with a mouse button held, the service no
   longer wakes up every 16 ms for nothing; a pointer move or a scroll re-arm
   starts it again. Less battery for the same behaviour.
+- The countdown ring stays hidden for the first fifth of a dwell (at most
+  250 ms), so it no longer flickers behind a pointer that merely slowed down.
+  Only the feedback waits; the click lands exactly when it did before.
 
 ### Fixed
 
