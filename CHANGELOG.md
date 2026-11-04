@@ -32,6 +32,10 @@ tagged release.
 
 ### Fixed
 
+- A mouse button held by the user suppresses dwell clicking for the whole hold,
+  however the pointer moves, so a dwell can no longer land in the middle of the
+  user's own drag or text selection. Letting go locks until the pointer moves.
+  Before, only the press locked, and a long enough drag could dwell-click.
 - Turning the scroll wheel cancels a running dwell countdown and locks until the
   pointer moves. The content under a resting pointer has changed, so the
   countdown was no longer aimed at what the user chose (the PowerToys Dwell

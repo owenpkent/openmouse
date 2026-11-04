@@ -35,6 +35,12 @@ class CursorView(context: Context) : View(context) {
     /** Called on a scroll-wheel turn: (x, y, vscroll) where vscroll > 0 is wheel-up. */
     var onScroll: ((Float, Float, Float) -> Unit)? = null
 
+    /**
+     * Whether any mouse button is down after the event just reported, called on
+     * every mouse event. The service keeps dwelling suppressed while one is.
+     */
+    var onButtonsChanged: ((Boolean) -> Unit)? = null
+
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
 
@@ -254,6 +260,9 @@ class CursorView(context: Context) : View(context) {
     private fun report(event: MotionEvent) {
         cursorX = event.x
         cursorY = event.y
+        // Buttons first, so a move with a button held is seen as held when the
+        // dwell machine receives it.
+        onButtonsChanged?.invoke(event.buttonState != 0)
         onMove?.invoke(cursorX, cursorY)
         invalidate()
     }

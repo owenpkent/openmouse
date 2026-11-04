@@ -35,6 +35,10 @@ import kotlin.math.hypot
  *   app locks, and the ordinary distance from the rest point applies again.
  *   This is what stops a parked pointer from firing the same menu entry every
  *   dwell period, and a slip off a cell from tapping the app beside it.
+ * - **A held button suppresses dwelling** ([setExternalButtonHeld]) for the
+ *   whole hold, whatever the pointer does: a dwell must never cut short the
+ *   user's own drag or selection. Letting go locks until the pointer moves, so
+ *   the spot where the button came up is not clicked by the rest that follows.
  * - **Pause** ([setPaused]) suspends dwelling on the app but not on the menu
  *   (any rest with a non-null key), so a user who cannot click can still reach
  *   the resume entry. It locks in both directions.
@@ -98,6 +102,7 @@ class DwellMachine(
     private var locked = true
     private var lockedAfterAction = false
     private var paused = false
+    private var externalButtonHeld = false
     // True while the running countdown is one that [rearmInPlace] started: it
     // runs for the repeat interval, not the dwell time. Cleared by any new
     // countdown that movement starts, and by every lock.
@@ -107,6 +112,8 @@ class DwellMachine(
     data class Poll(val progress: Float, val clicked: Boolean, val x: Float, val y: Float)
 
     val isPaused: Boolean get() = paused
+
+    val isExternalButtonHeld: Boolean get() = externalButtonHeld
 
     /**
      * Lock and re-baseline the rest timer. Called when the engine (re)starts, so
@@ -129,6 +136,13 @@ class DwellMachine(
         currentX = x
         currentY = y
         currentKey = restKey
+
+        // While the user holds a button the pointer is theirs: nothing arms,
+        // and the lock follows the pointer so letting go rests it where it is.
+        if (externalButtonHeld) {
+            lockUntilMove()
+            return
+        }
 
         val keyChanged = restKey != anchorKey
 
@@ -207,6 +221,7 @@ class DwellMachine(
      * usual, and a countdown started by movement waits the full dwell time.
      */
     fun rearmInPlace(nowMs: Long) {
+        if (externalButtonHeld) return // the user's hold outranks a repeat
         restStart = nowMs
         locked = false
         lockedAfterAction = false
@@ -226,13 +241,30 @@ class DwellMachine(
     }
 
     /**
+     * A mouse button went down (true) or every button is up again (false), as
+     * the caller observes it on each pointer event. While any button is held the
+     * machine stays locked whatever the pointer does, so a dwell can never cut
+     * short the user's own drag or selection; letting go locks until the pointer
+     * moves. Returns true when the state changed (and so locked), false for a
+     * redundant call, which disturbs nothing.
+     */
+    fun setExternalButtonHeld(held: Boolean): Boolean {
+        if (held == externalButtonHeld) return false
+        externalButtonHeld = held
+        lockUntilMove()
+        return true
+    }
+
+    /**
      * Evaluate the machine at [nowMs]. If the returned [Poll.clicked] is true the
      * machine has already locked itself (with the post-action distance), so the
      * same rest will not click twice. The firing poll reports zero progress so
      * the countdown ring clears.
      */
     fun poll(nowMs: Long): Poll {
-        if (locked) return Poll(0f, false, currentX, currentY)
+        // A hold keeps the machine locked already; the second test is belt and
+        // braces, so no future arming path can fire under the user's finger.
+        if (locked || externalButtonHeld) return Poll(0f, false, currentX, currentY)
         // Paused: only a keyed target (a menu cell) may still complete a dwell.
         if (paused && anchorKey == null) return Poll(0f, false, currentX, currentY)
         // A timestamp older than the anchor counts as no elapsed time, and a

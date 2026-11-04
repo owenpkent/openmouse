@@ -115,6 +115,8 @@ class MouseAccessibilityService : AccessibilityService() {
         view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y, fromDwell = false) }
         // Same rule as the modern path: another button is the user's own action.
         view.onOtherButton = { dwellClicker?.lockUntilMove() }
+        // And a button held, for as long as it is held, suppresses dwelling.
+        view.onButtonsChanged = { held -> dwellClicker?.setButtonHeld(held) }
         view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         // A resize (rotation) re-lays out the menu with no pointer event, so the
         // entry the dwell machine is anchored on may no longer be under the
@@ -171,10 +173,16 @@ class MouseAccessibilityService : AccessibilityService() {
         if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) return
         val x = event.rawX
         val y = event.rawY
+        // Any button the user holds, for as long as it is held, keeps the dwell
+        // machine locked: a dwell must never cut short their own drag or
+        // selection. buttonState is the set of buttons down after this event,
+        // so the event that lets the last one go reads as "all up".
+        dwellClicker?.setButtonHeld(event.buttonState != 0)
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER,
             MotionEvent.ACTION_HOVER_MOVE,
             MotionEvent.ACTION_MOVE,
+            MotionEvent.ACTION_BUTTON_RELEASE,
             -> onPointerMoved(x, y, draw = true)
 
             MotionEvent.ACTION_BUTTON_PRESS -> {
