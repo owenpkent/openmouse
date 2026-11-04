@@ -617,6 +617,80 @@ class DwellMachineTest {
     }
 
     @Nested
+    inner class IdlePolling {
+
+        // DwellClicker polls only while isCountingDown is true, so these pin
+        // exactly when time alone can change something.
+
+        @Test
+        fun onlyAnArmedMachineIsCountingDown() {
+            val m = machine()
+            m.reset(0L)
+            assertFalse(m.isCountingDown) // starts locked
+            m.onMove(5f, 0f, 0L)
+            assertFalse(m.isCountingDown) // within tolerance: still locked
+            m.onMove(100f, 100f, 0L)
+            assertTrue(m.isCountingDown)
+            m.lockUntilMove()
+            assertFalse(m.isCountingDown)
+        }
+
+        @Test
+        fun aFiringPollStopsTheCountdownAndARearmRestartsIt() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            assertFalse(m.isCountingDown) // locked after the click
+            m.rearmInPlace(100L)
+            assertTrue(m.isCountingDown) // a repeating scroll keeps ticking
+        }
+
+        @Test
+        fun pauseOverTheAppIsNotCountingDownButAMenuEntryIs() {
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L) // over the app: armed, but nothing can fire
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L, restKey = "cell") // Resume stays reachable
+            assertTrue(m.isCountingDown)
+        }
+
+        @Test
+        fun aHeldButtonIsNotCountingDown() {
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true)
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L)
+            assertFalse(m.isCountingDown)
+            m.setExternalButtonHeld(false)
+            assertFalse(m.isCountingDown) // locked until move
+            m.onMove(400f, 400f, 0L)
+            assertTrue(m.isCountingDown)
+        }
+
+        @Test
+        fun whileIdlePollsChangeNothingHoweverFarApart() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            assertFalse(m.isCountingDown)
+            for (t in listOf(101L, 10_000L, Long.MAX_VALUE)) {
+                val p = m.poll(t)
+                assertFalse(p.clicked)
+                assertEquals(0f, p.progress, EPS)
+            }
+            assertFalse(m.isCountingDown)
+            // And the next move arms it as if no time had passed.
+            m.onMove(300f, 300f, Long.MAX_VALUE - 100L)
+            assertTrue(m.isCountingDown)
+            assertTrue(m.poll(Long.MAX_VALUE).clicked)
+        }
+    }
+
+    @Nested
     inner class PauseAndSuppression {
 
         @Test

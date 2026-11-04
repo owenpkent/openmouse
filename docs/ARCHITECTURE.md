@@ -87,8 +87,11 @@ drawn at the same point, so they coincide.
 ## The dwell state machine
 
 `DwellMachine` keeps an *anchor* (where the cursor came to rest, plus the menu
-entry under it, if any) and a monotonic rest start. `DwellClicker` polls it from
-a 16 ms ticker with `SystemClock.uptimeMillis()`, and the machine computes
+entry under it, if any) and a monotonic rest start. `DwellClicker` polls it
+every 16 ms with `SystemClock.uptimeMillis()`, but only while a countdown is
+running (`isCountingDown`: armed, no button held, not paused over the app); an
+idle machine, which is most of the time, costs no wake-ups, and every call that
+can arm it (a move, a re-arm in place) restarts the ticker. The machine computes
 `progress = elapsed / dwellTime`. The rules mirror the PowerToys Dwell Click
 engine, and every one of them is biased toward refusing to fire when intent is
 unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):

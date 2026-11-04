@@ -29,7 +29,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
  * - while paused, a rest over the app (null key) never fires;
  * - while a mouse button is held, nothing fires and no progress is reported,
  *   however the pointer moves;
- * - progress never decreases while the pointer rests and time moves forward.
+ * - progress never decreases while the pointer rests and time moves forward;
+ * - a poll taken while `isCountingDown` is false changes nothing (DwellClicker
+ *   stops its ticker on that flag), and a click always leaves it false.
  *
  * Without `JAZZER_FUZZ=1` in the environment this only replays the seed corpus
  * (and an empty input) as an ordinary JUnit test. The nightly workflow runs it
@@ -162,7 +164,18 @@ class DwellMachineFuzzTest {
                 }
 
                 else -> {
+                    val counting = machine.isCountingDown
                     val poll = machine.poll(now)
+
+                    // DwellClicker stops polling while this is false, so a poll
+                    // that would have changed anything must have been predicted.
+                    if (!counting) {
+                        assertFalse(poll.clicked, "fired while not counting down")
+                        assertEquals(0f, poll.progress, "progress reported while not counting down")
+                    }
+                    if (poll.clicked) {
+                        assertFalse(machine.isCountingDown, "still counting down after a click (locks must stop the ticker)")
+                    }
 
                     assertTrue(poll.progress.isFinite(), "progress not finite: $poll")
                     assertTrue(poll.progress in 0f..1f, "progress out of range: $poll")

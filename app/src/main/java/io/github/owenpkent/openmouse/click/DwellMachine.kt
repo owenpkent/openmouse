@@ -116,6 +116,15 @@ class DwellMachine(
     val isExternalButtonHeld: Boolean get() = externalButtonHeld
 
     /**
+     * True while time alone can change something: a countdown is running, which
+     * means the machine is armed, no button is held, and it is not paused over
+     * the app. [DwellClicker] polls only while this is true, so an idle machine
+     * costs no wake-ups; every call that can arm it re-checks this afterwards.
+     */
+    val isCountingDown: Boolean
+        get() = !locked && !externalButtonHeld && !(paused && anchorKey == null)
+
+    /**
      * Lock and re-baseline the rest timer. Called when the engine (re)starts, so
      * a pointer left resting across a stop/start cycle cannot fire the instant
      * the machine comes back. Pause is a user choice, not transient state, and
