@@ -41,7 +41,7 @@ class DwellClicker(
             // Decide after the callback: a scroll re-arms in place from inside
             // onClick (ensureTicking sees the flag still set and posts nothing),
             // while a click locks and the ticker simply stops.
-            if (machine.isCountingDown) {
+            if (running && machine.isCountingDown) {
                 handler.postDelayed(this, TICK_INTERVAL_MS)
             } else {
                 ticking = false
