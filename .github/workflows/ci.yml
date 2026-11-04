@@ -60,6 +60,16 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --no-daemon
 
+      # app/gradle.lockfile must describe the build that just ran: OSV-Scanner
+      # reads it, and Dependabot edits libs.versions.toml without touching it.
+      - name: Check that the dependency lockfile is current
+        run: |
+          ./gradlew :app:dependencies --write-locks --no-daemon -q > /dev/null
+          if ! git diff --exit-code -- app/gradle.lockfile; then
+            echo "::error::app/gradle.lockfile is out of date. Run ./gradlew :app:dependencies --write-locks and commit the result."
+            exit 1
+          fi
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -114,12 +124,26 @@ jobs:
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
 
+  # Known-vulnerability gate for pull requests: fails only on an advisory the
+  # pull request introduces. The steps, and why they are written out instead of
+  # using the reusable workflow from google/osv-scanner-action, are in
+  # osv-diff.yml; osv-selftest.yml runs the same steps on a hostile fixture to
+  # prove the gate still catches it. A push to main has no base to diff against,
+  # so the job runs on pull requests only and the aggregate accepts that skip.
+  osv:
+    name: New vulnerabilities in this pull request
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/osv-diff.yml
+    with:
+      base_ref: ${{ github.base_ref }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+
   # The one check branch protection requires. It runs whatever happened above
   # and fails unless every job it needs succeeded, so a failed or cancelled job
   # can never sit next to a green check.
   tests:
     name: Tests
-    needs: [build-test-lint, release-build]
+    needs: [build-test-lint, release-build, osv]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -128,6 +152,8 @@ jobs:
         env:
           BUILD_TEST_LINT: ${{ needs.build-test-lint.result }}
           RELEASE_BUILD: ${{ needs.release-build.result }}
+          OSV: ${{ needs.osv.result }}
+          EVENT: ${{ github.event_name }}
         run: |
           bad=0
           must_pass() {
@@ -136,4 +162,10 @@ jobs:
           }
           must_pass build-test-lint "$BUILD_TEST_LINT"
           must_pass release-build "$RELEASE_BUILD"
+          # The vulnerability diff needs a pull request; on a push to main its
+          # skip is expected, anywhere else it is a failure.
+          echo "osv: $OSV (event: $EVENT)"
+          if [ "$OSV" != "success" ] && ! { [ "$OSV" = "skipped" ] && [ "$EVENT" != "pull_request" ]; }; then
+            bad=1
+          fi
           exit $bad

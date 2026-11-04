@@ -90,3 +90,10 @@ dependencies {
     testImplementation(libs.jazzer.junit)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
+
+// Lock every resolved dependency version in app/gradle.lockfile, so a build is
+// reproducible and OSV-Scanner has a complete list to check for known
+// vulnerabilities. Update with: ./gradlew :app:dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}

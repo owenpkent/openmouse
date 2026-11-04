@@ -1,0 +1,213 @@
+# Known-vulnerability gate for pull requests: fails only on an advisory the pull
+# request introduces. Called by the `osv` job in ci.yml (the real gate) and by
+# osv-selftest.yml (the regression that proves the gate still catches what it
+# should). The scanner (Google's OSV-Scanner, pinned to the same version osv.yml
+# uses for the weekly full scan) runs on the merge base and on the pull request
+# head, and the reporter compares the two, so a finding already in main never
+# blocks an unrelated change, and one that main fixed after this branch was cut
+# is not charged to it either. What is scanned: app/gradle.lockfile, which
+# Gradle dependency locking keeps complete (every resolved artifact of every
+# configuration).
+#
+# This is the scan sequence of google/osv-scanner-action's reusable pull request
+# workflow, written out here instead of called, for one reason: that workflow
+# writes both result files inside the checkout, between its two checkouts. A
+# pull request that adds a symlink `new-results.json -> old-results.json` makes
+# the second scan overwrite the first, and the diff then reports nothing new.
+# Here the results live outside the checkout, in a folder under $RUNNER_TEMP
+# that the tree cannot reach. The scanner and the reporter are Docker container
+# actions, and the runner mounts exactly one folder under $RUNNER_TEMP into such
+# a container: $RUNNER_TEMP/_github_home, as /github/home (the container's HOME).
+# The scanner writes there by the container path, and the check after the scans
+# looks for the files by the runner path, so if a runner change ever broke that
+# mapping the job would fail rather than compare the wrong files. The second
+# checkout is a fresh actions/checkout, which cleans the tree before the head is
+# scanned. No SARIF upload, so no security-events permission; the findings are
+# read from the job log and the annotations on the pull request.
+#
+# `fixture` and `expect` are for osv-selftest.yml only. With `fixture`, the head
+# tree gets what a hostile pull request would add: a lockfile line for an
+# artifact with known advisories, and symlinks from every result file name to
+# old-results.json at the top of the checkout. With `expect: introduced`, the job
+# passes only if the reporter failed and the head results name that artifact
+# while the base results do not. The gate itself leaves both at their defaults.
+#
+# When this fails: read the log for the artifact and the fixed version, bump it
+# in gradle/libs.versions.toml (Dependabot opens most of these), regenerate the
+# lockfile with `./gradlew :app:dependencies --write-locks`, and re-run. A
+# finding with no fix, or one that does not apply, is the owner's call: say why
+# in the pull request.
+name: New vulnerabilities
+
+on:
+  workflow_call:
+    inputs:
+      base_ref:
+        description: The branch the pull request merges into; the base scan is its merge base with the head.
+        type: string
+        required: true
+      head_sha:
+        description: The commit scanned as the pull request head.
+        type: string
+        required: true
+      fixture:
+        description: Self-test only. Plant a known-vulnerable artifact and the result-file symlinks in the head tree.
+        type: boolean
+        default: false
+      expect:
+        description: Self-test only. `none` (the gate) or `introduced` (the head must add the fixture artifact).
+        type: string
+        default: none
+
+permissions:
+  contents: read
+
+env:
+  # The artifact the fixture plants: an old jackson-databind with many published
+  # advisories, none of which will be withdrawn.
+  FIXTURE_ARTIFACT: com.fasterxml.jackson.core:jackson-databind
+  FIXTURE_LINE: com.fasterxml.jackson.core:jackson-databind:2.9.8=debugRuntimeClasspath,releaseRuntimeClasspath
+
+jobs:
+  scan:
+    name: Scan the merge base and the head
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check the inputs
+        env:
+          EXPECT: ${{ inputs.expect }}
+          FIXTURE: ${{ inputs.fixture }}
+        run: |
+          case "$EXPECT" in
+            none) ;;
+            introduced) [ "$FIXTURE" = "true" ] || { echo "::error::expect: introduced needs fixture: true"; exit 1; } ;;
+            *) echo "::error::Unknown expect: $EXPECT"; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the merge base
+        env:
+          BASE_REF: ${{ inputs.base_ref }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          base="$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")"
+          echo "merge base: $base"
+          git checkout --detach "$base"
+      # RESULTS_DIR is the one folder under $RUNNER_TEMP that a Docker container
+      # action can see, as /github/home. Set here from the shell's $RUNNER_TEMP
+      # (the `runner` context is not allowed in a job-level `env`).
+      - name: Keep the result files outside the checkout
+        run: |
+          RESULTS_DIR="$RUNNER_TEMP/_github_home"
+          case "$RESULTS_DIR" in
+            "$GITHUB_WORKSPACE"/*) echo "::error::$RESULTS_DIR is inside the checkout"; exit 1 ;;
+          esac
+          mkdir -p "$RESULTS_DIR"
+          rm -f "$RESULTS_DIR/old-results.json" "$RESULTS_DIR/new-results.json" "$RESULTS_DIR/results.sarif"
+          echo "RESULTS_DIR=$RESULTS_DIR" >> "$GITHUB_ENV"
+      # The merge base may predate the lockfile (the first scan after this gate
+      # lands); an empty file scans as "no packages", which is the right base.
+      - name: Make sure the base has a lockfile to scan
+        run: |
+          [ -f app/gradle.lockfile ] || { mkdir -p app; : > app/gradle.lockfile; echo "no lockfile at the merge base: scanning an empty one"; }
+      - name: Scan the merge base
+        id: scan-old
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --format=json
+            --output=/github/home/old-results.json
+            --lockfile=app/gradle.lockfile
+      - name: Check out the pull request head with a clean tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.head_sha }}
+          clean: true
+          persist-credentials: false
+      # What the attack in the header adds to a pull request, written into the
+      # head tree as if it had been committed there. A lockfile line is enough
+      # for the scanner; nothing is resolved or built.
+      - name: Plant the self-test fixture in the head tree
+        if: inputs.fixture
+        run: |
+          printf '%s\n' "$FIXTURE_LINE" >> app/gradle.lockfile
+          for name in new-results.json results.sarif; do
+            ln -s old-results.json "$name"
+          done
+          ln -s "$RESULTS_DIR/old-results.json" old-results.json
+          ls -l old-results.json new-results.json results.sarif
+          tail -n 2 app/gradle.lockfile
+      - name: Scan the pull request head
+        id: scan-new
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --format=json
+            --output=/github/home/new-results.json
+            --lockfile=app/gradle.lockfile
+      # The scanner exits non-zero both when it finds something (the reporter's
+      # job to judge) and when the scan itself breaks, so continue-on-error
+      # cannot tell them apart. A broken scan writes no file, and the reporter
+      # reads a missing --new file as "nothing new". So both files must exist,
+      # be regular files, and be where the step above said they would be, or the
+      # job fails rather than reporting a clean diff.
+      - name: Check that both scans wrote their results outside the checkout
+        env:
+          OLD_OUTCOME: ${{ steps.scan-old.outcome }}
+          NEW_OUTCOME: ${{ steps.scan-new.outcome }}
+        run: |
+          status=0
+          for name in old new; do
+            f="$RESULTS_DIR/$name-results.json"
+            if [ -L "$f" ] || [ ! -f "$f" ] || [ ! -s "$f" ]; then
+              echo "::error::The $name scan did not write $f. Outcomes: old $OLD_OUTCOME, new $NEW_OUTCOME. See the scan steps for the cause."
+              status=1
+            fi
+          done
+          exit "$status"
+      # The reporter fails on a new advisory. Its outcome is judged in the next
+      # step, so that the self-test can require a failure where the gate
+      # requires a pass.
+      - name: Report what the pull request introduces
+        id: report
+        uses: google/osv-scanner-action/osv-reporter-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --output=/github/home/results.sarif
+            --old=/github/home/old-results.json
+            --new=/github/home/new-results.json
+            --gh-annotations=true
+            --fail-on-vuln=true
+      - name: Judge the report
+        env:
+          EXPECT: ${{ inputs.expect }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
+        run: |
+          echo "reporter: $REPORT_OUTCOME, expected: $EXPECT"
+          if [ "$EXPECT" = "none" ]; then
+            [ "$REPORT_OUTCOME" = "success" ] && exit 0
+            echo "::error::This pull request introduces a known vulnerability, or the reporter broke. See the step above."
+            exit 1
+          fi
+          status=0
+          if [ "$REPORT_OUTCOME" != "failure" ]; then
+            echo "::error::The reporter did not fail on the planted $FIXTURE_ARTIFACT. The gate would have let it through."
+            status=1
+          fi
+          names() { jq -r '[.results[]?.packages[]?.package.name] | .[]' "$1"; }
+          if ! names "$RESULTS_DIR/new-results.json" | grep -qx "$FIXTURE_ARTIFACT"; then
+            echo "::error::The head scan does not name $FIXTURE_ARTIFACT."
+            status=1
+          fi
+          if names "$RESULTS_DIR/old-results.json" | grep -qx "$FIXTURE_ARTIFACT"; then
+            echo "::error::The base scan names $FIXTURE_ARTIFACT, so the fixture proves nothing. Pick another artifact."
+            status=1
+          fi
+          exit "$status"

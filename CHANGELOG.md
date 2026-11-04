@@ -18,6 +18,11 @@ tagged release.
   hook runs the unit tests and lint before every push (`./gradlew
   installGitHooks` turns it on), and CONTRIBUTING.md gained a table of every
   gate and what to do when it fails.
+- Dependency and code scanning: Gradle dependency locking (`app/gradle.lockfile`,
+  checked for freshness in CI), an OSV-Scanner gate that fails a pull request
+  only on an advisory it introduces (with a weekly full scan and a self-test
+  that plants a known-vulnerable artifact behind result-file symlinks), CodeQL
+  for the Kotlin code, and Dependabot for Gradle and GitHub Actions.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in
