@@ -44,6 +44,15 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getFloat(KEY_POST_ACTION_DP, DEFAULT_POST_ACTION_DP).coerceIn(MIN_POST_ACTION_DP, MAX_POST_ACTION_DP)
         set(value) = prefs.edit { putFloat(KEY_POST_ACTION_DP, value.coerceIn(MIN_POST_ACTION_DP, MAX_POST_ACTION_DP)) }
 
+    /**
+     * How often a scroll repeats, in milliseconds, while the pointer keeps
+     * resting after the first notch. The first notch at a rest point always
+     * waits the full [dwellTimeMs]; this is the period of the notches after it.
+     */
+    var scrollRepeatMs: Long
+        get() = prefs.getInt(KEY_SCROLL_REPEAT_MS, DEFAULT_SCROLL_REPEAT_MS).coerceIn(MIN_SCROLL_REPEAT_MS, MAX_SCROLL_REPEAT_MS).toLong()
+        set(value) = prefs.edit { putInt(KEY_SCROLL_REPEAT_MS, value.toInt().coerceIn(MIN_SCROLL_REPEAT_MS, MAX_SCROLL_REPEAT_MS)) }
+
     /** Cross-hair size multiplier. */
     var cursorScale: Float
         get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
@@ -75,6 +84,7 @@ class OpenMouseSettings(context: Context) {
         private const val KEY_DWELL_MS = "dwell_ms"
         private const val KEY_MOVE_DP = "move_dp"
         private const val KEY_POST_ACTION_DP = "post_action_dp"
+        private const val KEY_SCROLL_REPEAT_MS = "scroll_repeat_ms"
         private const val KEY_CURSOR_SCALE = "cursor_scale"
         private const val KEY_CURSOR_COLOR = "cursor_color"
         private const val KEY_MENU_RIGHT = "menu_right"
@@ -90,6 +100,13 @@ class OpenMouseSettings(context: Context) {
         const val DEFAULT_POST_ACTION_DP = 20f
         const val MIN_POST_ACTION_DP = 4f
         const val MAX_POST_ACTION_DP = 48f
+
+        // 400 ms is the PowerToys Dwell Click default: about seven lines a
+        // second at the usual three lines per notch, fast enough to read a page
+        // by and slow enough to stop on the line you want.
+        const val DEFAULT_SCROLL_REPEAT_MS = 400
+        const val MIN_SCROLL_REPEAT_MS = 100
+        const val MAX_SCROLL_REPEAT_MS = 2000
 
         const val DEFAULT_CURSOR_SCALE = 1.0f
         const val MIN_CURSOR_SCALE = 0.6f

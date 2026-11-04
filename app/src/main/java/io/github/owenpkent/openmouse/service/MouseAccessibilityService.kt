@@ -221,6 +221,7 @@ class MouseAccessibilityService : AccessibilityService() {
             prefs.dwellTimeMs,
             prefs.moveThresholdDp * density,
             prefs.postActionThresholdDp * density,
+            prefs.scrollRepeatMs,
         )
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)

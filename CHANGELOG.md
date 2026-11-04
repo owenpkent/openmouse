@@ -18,8 +18,11 @@ tagged release.
   travel after a dwell click before the next countdown may start, so a shaky
   hand cannot click the same spot twice (the movement tolerance is unchanged).
   Default 20 dp; it never acts narrower than the movement tolerance.
-- Scroll up / down repeat while the pointer rests: one notch per dwell period,
-  instead of needing a fresh move between notches.
+- Scroll up / down repeat while the pointer rests, instead of needing a fresh
+  move between notches. The first notch at a rest point waits the full dwell
+  time; the notches after it land every scroll repeat interval, a new setting
+  (100 ms to 2 s, default 400 ms, the PowerToys Dwell Click default). One notch
+  per dwell time was too slow to read a page by.
 - Jazzer fuzz targets for the pure `DwellMachine` and `MenuGeometry` cores,
   mirroring the PowerToys Dwell Click fuzz target, plus a nightly GitHub Actions
   fuzz workflow and a CI workflow (build, unit tests, lint).

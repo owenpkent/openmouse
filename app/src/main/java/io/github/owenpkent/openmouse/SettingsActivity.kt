@@ -28,6 +28,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var dwellLabel: TextView
     private lateinit var moveLabel: TextView
     private lateinit var postActionLabel: TextView
+    private lateinit var repeatLabel: TextView
     private lateinit var sizeLabel: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +39,7 @@ class SettingsActivity : AppCompatActivity() {
         dwellLabel = findViewById(R.id.dwellLabel)
         moveLabel = findViewById(R.id.moveLabel)
         postActionLabel = findViewById(R.id.postActionLabel)
+        repeatLabel = findViewById(R.id.repeatLabel)
         sizeLabel = findViewById(R.id.sizeLabel)
 
         setupDwellToggle()
@@ -77,6 +79,14 @@ class SettingsActivity : AppCompatActivity() {
             updatePostActionLabel(value)
         }
 
+        val repeat = findViewById<Slider>(R.id.repeatSlider)
+        repeat.value = settings.scrollRepeatMs.toFloat()
+        updateRepeatLabel(settings.scrollRepeatMs)
+        repeat.addOnChangeListener { _, value, _ ->
+            settings.scrollRepeatMs = value.toLong()
+            updateRepeatLabel(value.toLong())
+        }
+
         val size = findViewById<Slider>(R.id.sizeSlider)
         size.value = settings.cursorScale * 100f
         updateSizeLabel(settings.cursorScale)
@@ -96,6 +106,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updatePostActionLabel(dp: Float) {
         postActionLabel.text = getString(R.string.settings_post_action_value, dp.toInt())
+    }
+
+    private fun updateRepeatLabel(ms: Long) {
+        repeatLabel.text = getString(R.string.settings_scroll_repeat_value, ms.toInt())
     }
 
     private fun updateSizeLabel(scale: Float) {

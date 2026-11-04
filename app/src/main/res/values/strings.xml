@@ -22,6 +22,7 @@
     <string name="settings_dwell_time">Dwell time</string>
     <string name="settings_move_tolerance">Movement tolerance</string>
     <string name="settings_post_action_tolerance">Re-arm distance after a click</string>
+    <string name="settings_scroll_repeat">Scroll repeat interval</string>
     <string name="settings_cursor_size">Cursor size</string>
     <string name="settings_cursor_color">Cursor color</string>
     <string name="settings_menu_side">Menu side</string>
@@ -31,6 +32,7 @@
     <string name="settings_dwell_value">Dwell time:   %1$.1f s</string>
     <string name="settings_move_value">Movement tolerance:   %1$d dp</string>
     <string name="settings_post_action_value">Re-arm distance after a click:   %1$d dp</string>
+    <string name="settings_scroll_repeat_value">Scroll repeat interval:   %1$d ms</string>
     <string name="settings_size_value">Cursor size:   %1$d%%</string>
 
     <string-array name="cursor_color_names">
