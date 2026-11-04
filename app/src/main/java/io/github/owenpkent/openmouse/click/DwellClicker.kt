@@ -36,7 +36,7 @@ class DwellClicker(
                 return
             }
             val poll = machine.poll(SystemClock.uptimeMillis())
-            onProgress(poll.progress)
+            onProgress(poll.ringProgress) // the ring waits out the start of a countdown; the click does not
             if (poll.clicked) onClick(poll.x, poll.y)
             // Decide after the callback: a scroll re-arms in place from inside
             // onClick (ensureTicking sees the flag still set and posts nothing),

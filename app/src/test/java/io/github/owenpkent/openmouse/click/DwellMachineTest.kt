@@ -130,6 +130,79 @@ class DwellMachineTest {
     }
 
     @Nested
+    inner class CountdownRing {
+
+        @Test
+        fun ringWaitsAFifthOfAShortDwell() {
+            val m = machine() // 100 ms dwell: the ring waits 20 ms
+            arm(m)
+            val early = m.poll(19L)
+            assertEquals(0.19f, early.progress, EPS) // the countdown runs
+            assertEquals(0f, early.ringProgress, EPS) // but the ring is hidden
+            val shown = m.poll(20L)
+            assertEquals(0.2f, shown.ringProgress, EPS) // then shows at its real fill
+            assertEquals(shown.progress, shown.ringProgress, EPS)
+        }
+
+        @Test
+        fun ringWaitsAtMost250msOfALongDwell() {
+            val m = DwellMachine(dwellTimeMs = 10_000L, moveThresholdPx = 10f)
+            arm(m)
+            assertEquals(0f, m.poll(249L).ringProgress, EPS)
+            assertEquals(0.025f, m.poll(250L).ringProgress, EPS)
+            assertEquals(250L, DwellMachine.ringDelayMs(10_000L))
+        }
+
+        @Test
+        fun theClickDoesNotWait() {
+            // Only the feedback is delayed: the dwell fires exactly when it
+            // always did, delay or not.
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+
+            val tiny = DwellMachine(dwellTimeMs = 1L, moveThresholdPx = 10f)
+            arm(tiny)
+            assertEquals(0L, DwellMachine.ringDelayMs(1L))
+            assertTrue(tiny.poll(1L).clicked)
+        }
+
+        @Test
+        fun ringIsHiddenWhileLockedAndOnTheFiringPoll() {
+            val m = machine()
+            m.reset(0L)
+            assertEquals(0f, m.poll(1000L).ringProgress, EPS) // locked: nothing to show
+            arm(m, nowMs = 1000L)
+            val fired = m.poll(1100L)
+            assertTrue(fired.clicked)
+            assertEquals(0f, fired.ringProgress, EPS) // the ring clears with the click
+        }
+
+        @Test
+        fun aRepeatingScrollHasItsOwnShorterDelay() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 40L)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L) // a 40 ms countdown: the ring waits 8 ms
+            assertEquals(0f, m.poll(107L).ringProgress, EPS)
+            assertEquals(0.2f, m.poll(108L).ringProgress, EPS)
+        }
+
+        @Test
+        fun degenerateDwellTimesStillShowTheRing() {
+            // Under 5 ms the fifth rounds to zero, so the ring shows as soon as
+            // there is any progress, and a nonsense period never hides it forever.
+            assertEquals(0L, DwellMachine.ringDelayMs(4L))
+            assertEquals(0L, DwellMachine.ringDelayMs(0L))
+            assertEquals(0L, DwellMachine.ringDelayMs(-1000L))
+            assertEquals(250L, DwellMachine.ringDelayMs(Long.MAX_VALUE))
+            val m = DwellMachine(dwellTimeMs = 4L, moveThresholdPx = 10f)
+            arm(m)
+            assertEquals(0.25f, m.poll(1L).ringProgress, EPS)
+        }
+    }
+
+    @Nested
     inner class DegenerateInputs {
 
         @Test

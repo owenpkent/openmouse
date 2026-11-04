@@ -31,7 +31,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
  *   however the pointer moves;
  * - progress never decreases while the pointer rests and time moves forward;
  * - a poll taken while `isCountingDown` is false changes nothing (DwellClicker
- *   stops its ticker on that flag), and a click always leaves it false.
+ *   stops its ticker on that flag), and a click always leaves it false;
+ * - the ring progress is either hidden (0) or exactly the countdown progress.
  *
  * Without `JAZZER_FUZZ=1` in the environment this only replays the seed corpus
  * (and an empty input) as an ordinary JUnit test. The nightly workflow runs it
@@ -179,6 +180,11 @@ class DwellMachineFuzzTest {
 
                     assertTrue(poll.progress.isFinite(), "progress not finite: $poll")
                     assertTrue(poll.progress in 0f..1f, "progress out of range: $poll")
+                    // The ring shows the countdown or nothing, never something else.
+                    assertTrue(
+                        poll.ringProgress == 0f || poll.ringProgress == poll.progress,
+                        "ring progress is neither hidden nor the countdown: $poll",
+                    )
                     assertEquals(0, java.lang.Float.compare(lastX, poll.x), "poll x drifted from last move")
                     assertEquals(0, java.lang.Float.compare(lastY, poll.y), "poll y drifted from last move")
 

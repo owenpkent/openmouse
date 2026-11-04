@@ -108,8 +108,21 @@ class DwellMachine(
     // countdown that movement starts, and by every lock.
     private var repeating = false
 
-    /** A snapshot of the machine at a point in time. */
-    data class Poll(val progress: Float, val clicked: Boolean, val x: Float, val y: Float)
+    /**
+     * A snapshot of the machine at a point in time. [progress] is the countdown
+     * (0 to 1); [ringProgress] is what the countdown ring should show: the same
+     * value, except 0 for the first fifth of a countdown (at most 250 ms,
+     * [ringDelayMs]). Once the machine is armed every brief pause in ordinary
+     * movement starts a countdown, and a ring shown from the first poll trailed
+     * the moving cursor. Only the feedback waits; the click does not.
+     */
+    data class Poll(
+        val progress: Float,
+        val clicked: Boolean,
+        val x: Float,
+        val y: Float,
+        val ringProgress: Float = progress,
+    )
 
     val isPaused: Boolean get() = paused
 
@@ -289,7 +302,10 @@ class DwellMachine(
             lockAfterAction()
             return Poll(0f, clicked = true, x = currentX, y = currentY)
         }
-        return Poll(progress, clicked = false, x = currentX, y = currentY)
+        // The ring waits out the first fifth of the countdown (capped) so it is
+        // not drawn trailing a pointer that merely slowed down.
+        val ring = if (elapsed >= ringDelayMs(period)) progress else 0f
+        return Poll(progress, clicked = false, x = currentX, y = currentY, ringProgress = ring)
     }
 
     private fun startCountdown(x: Float, y: Float, key: Any?, nowMs: Long) {
@@ -305,6 +321,16 @@ class DwellMachine(
     companion object {
         const val DEFAULT_DWELL_MS = 1000L
         const val DEFAULT_MOVE_THRESHOLD_PX = 14f
+
+        /** The longest the countdown ring waits before it is shown, however long the dwell. */
+        const val MAX_RING_DELAY_MS = 250L
+
+        /**
+         * How long the ring stays hidden at the start of a countdown of
+         * [periodMs]: a fifth of it, at most [MAX_RING_DELAY_MS]. Zero for a
+         * period under 5 ms, so a degenerate dwell still shows what it does.
+         */
+        fun ringDelayMs(periodMs: Long): Long = minOf(clampDwell(periodMs) / 5, MAX_RING_DELAY_MS)
 
         private fun clampDwell(ms: Long): Long = ms.coerceAtLeast(1L)
 
