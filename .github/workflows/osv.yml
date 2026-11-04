@@ -9,9 +9,10 @@
 # reason given there. Keep the scanner version and the lockfile here in step with
 # osv-diff.yml.
 #
-# What is scanned: app/gradle.lockfile, complete thanks to Gradle dependency
-# locking (every resolved artifact of every configuration, test and lint
-# included).
+# What is scanned: app/gradle.lockfile, which Gradle dependency locking keeps
+# complete for what ships (the debug and release runtime classpaths). Test and
+# lint tooling is left out on purpose: it pulls its own, often old, libraries
+# that never reach a device.
 #
 # Permissions: the reusable workflow declares `security-events: write` on its job
 # (for the SARIF upload to Code Scanning), and a caller must grant at least what

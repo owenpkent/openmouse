@@ -91,9 +91,14 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-// Lock every resolved dependency version in app/gradle.lockfile, so a build is
-// reproducible and OSV-Scanner has a complete list to check for known
-// vulnerabilities. Update with: ./gradlew :app:dependencies --write-locks
-dependencyLocking {
-    lockAllConfigurations()
+// Lock what ships: the debug and release runtime classpaths, in
+// app/gradle.lockfile, so a build is reproducible and OSV-Scanner has the full
+// list of artifacts that reach a device. Test and lint configurations are left
+// unlocked on purpose: their tooling pulls its own, often old, libraries that
+// never ship, and a vulnerability scan of them is noise. Update with:
+// ./gradlew :app:dependencies --write-locks
+configurations.configureEach {
+    if (name.endsWith("RuntimeClasspath") && !name.contains("Test")) {
+        resolutionStrategy.activateDependencyLocking()
+    }
 }

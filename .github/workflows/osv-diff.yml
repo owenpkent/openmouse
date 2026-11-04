@@ -6,8 +6,9 @@
 # head, and the reporter compares the two, so a finding already in main never
 # blocks an unrelated change, and one that main fixed after this branch was cut
 # is not charged to it either. What is scanned: app/gradle.lockfile, which
-# Gradle dependency locking keeps complete (every resolved artifact of every
-# configuration).
+# Gradle dependency locking keeps complete for what ships (the debug and
+# release runtime classpaths; test and lint tooling pull their own, often
+# old, libraries that never reach a device).
 #
 # This is the scan sequence of google/osv-scanner-action's reusable pull request
 # workflow, written out here instead of called, for one reason: that workflow
@@ -109,19 +110,30 @@ jobs:
           mkdir -p "$RESULTS_DIR"
           rm -f "$RESULTS_DIR/old-results.json" "$RESULTS_DIR/new-results.json" "$RESULTS_DIR/results.sarif"
           echo "RESULTS_DIR=$RESULTS_DIR" >> "$GITHUB_ENV"
-      # The merge base may predate the lockfile (the first scan after this gate
-      # lands); an empty file scans as "no packages", which is the right base.
-      - name: Make sure the base has a lockfile to scan
+      # The merge base may predate the lockfile (every pull request until the
+      # gate itself is on the base branch). The scanner refuses an empty
+      # lockfile, so the base result is written by hand as "no packages", and
+      # the judge below reports instead of failing: with nothing to diff
+      # against, every advisory in the tree would read as introduced.
+      - name: Does the base have a lockfile?
+        id: base
         run: |
-          [ -f app/gradle.lockfile ] || { mkdir -p app; : > app/gradle.lockfile; echo "no lockfile at the merge base: scanning an empty one"; }
+          if [ -f app/gradle.lockfile ]; then
+            echo "has_lockfile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_lockfile=false" >> "$GITHUB_OUTPUT"
+            echo '{"results":[]}' > "$RESULTS_DIR/old-results.json"
+            echo "::warning::No app/gradle.lockfile at the merge base; the head scan is reported, not gated."
+          fi
       - name: Scan the merge base
         id: scan-old
+        if: steps.base.outputs.has_lockfile == 'true'
         uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
         continue-on-error: true
         with:
           scan-args: |-
             --format=json
-            --output=/github/home/old-results.json
+            --output-file=/github/home/old-results.json
             --lockfile=app/gradle.lockfile
       - name: Check out the pull request head with a clean tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -149,7 +161,7 @@ jobs:
         with:
           scan-args: |-
             --format=json
-            --output=/github/home/new-results.json
+            --output-file=/github/home/new-results.json
             --lockfile=app/gradle.lockfile
       # The scanner exits non-zero both when it finds something (the reporter's
       # job to judge) and when the scan itself breaks, so continue-on-error
@@ -171,6 +183,16 @@ jobs:
             fi
           done
           exit "$status"
+      # What each scan found, package by package, so the log answers "which
+      # artifact, which advisory" without downloading anything.
+      - name: Summarize the findings
+        run: |
+          summary() {
+            jq -r '.results[]?.packages[]? | select((.vulnerabilities // []) | length > 0)
+                   | "\(.package.name)@\(.package.version): \([.vulnerabilities[].id] | unique | join(", "))"' "$1"
+          }
+          echo "merge base:"; summary "$RESULTS_DIR/old-results.json" | sed 's/^/  /' || true
+          echo "head:"; summary "$RESULTS_DIR/new-results.json" | sed 's/^/  /' || true
       # The reporter fails on a new advisory. Its outcome is judged in the next
       # step, so that the self-test can require a failure where the gate
       # requires a pass.
@@ -189,11 +211,20 @@ jobs:
         env:
           EXPECT: ${{ inputs.expect }}
           REPORT_OUTCOME: ${{ steps.report.outcome }}
+          HAS_BASE: ${{ steps.base.outputs.has_lockfile }}
         run: |
-          echo "reporter: $REPORT_OUTCOME, expected: $EXPECT"
+          echo "reporter: $REPORT_OUTCOME, expected: $EXPECT, base lockfile: $HAS_BASE"
           if [ "$EXPECT" = "none" ]; then
             [ "$REPORT_OUTCOME" = "success" ] && exit 0
+            if [ "$HAS_BASE" = "false" ]; then
+              echo "::warning::The head scan has findings (see the summary above), but the merge base has no lockfile to diff against, so this run reports and does not gate. The gate is live once app/gradle.lockfile is on the base branch."
+              exit 0
+            fi
             echo "::error::This pull request introduces a known vulnerability, or the reporter broke. See the step above."
+            exit 1
+          fi
+          if [ "$HAS_BASE" = "false" ]; then
+            echo "::error::The self-test needs a lockfile at the merge base."
             exit 1
           fi
           status=0
