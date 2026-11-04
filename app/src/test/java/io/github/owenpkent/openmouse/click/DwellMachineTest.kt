@@ -595,6 +595,25 @@ class DwellMachineTest {
             m.onMove(100f, 100f, 2000L, restKey = "other") // entering another entry arms
             assertTrue(m.poll(2100L).clicked)
         }
+
+        @Test
+        fun aReleaseThatLandsOnAMenuEntryDoesNotArmIt() {
+            // The service feeds the release position while the machine still
+            // reads held, then the release, so the lock the release leaves
+            // anchors on the entry under the pointer. Reported the other way
+            // round, the release would lock on the old key and the move onto
+            // the new entry would arm it.
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true) // pressed on the app
+            m.onMove(300f, 300f, 10L, restKey = "back") // dragged onto Back, still held
+            m.setExternalButtonHeld(false) // let go on Back
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(301f, 300f, 10_000L, restKey = "back") // a tremor on the same entry
+            assertFalse(m.poll(20_000L).clicked)
+            m.onMove(300f, 300f, 20_000L, restKey = "home") // a different entry arms
+            assertTrue(m.poll(20_100L).clicked)
+        }
     }
 
     @Nested

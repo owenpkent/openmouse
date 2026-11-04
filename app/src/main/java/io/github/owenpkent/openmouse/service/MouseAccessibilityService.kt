@@ -176,8 +176,13 @@ class MouseAccessibilityService : AccessibilityService() {
         // Any button the user holds, for as long as it is held, keeps the dwell
         // machine locked: a dwell must never cut short their own drag or
         // selection. buttonState is the set of buttons down after this event,
-        // so the event that lets the last one go reads as "all up".
-        dwellClicker?.setButtonHeld(event.buttonState != 0)
+        // so the event that lets the last one go reads as "all up". A press is
+        // reported before the position, so the move that comes with it is seen
+        // under a held button; a release is reported after it, so the lock the
+        // release leaves anchors on whatever the pointer is over when the button
+        // comes up (a release that lands on a new menu entry must not arm it).
+        val held = event.buttonState != 0
+        if (held) dwellClicker?.setButtonHeld(true)
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER,
             MotionEvent.ACTION_HOVER_MOVE,
@@ -204,6 +209,7 @@ class MouseAccessibilityService : AccessibilityService() {
                 if (v != 0f) handleScroll(x, y, v)
             }
         }
+        if (!held) dwellClicker?.setButtonHeld(false)
     }
 
     private fun onPointerMoved(x: Float, y: Float, draw: Boolean) {

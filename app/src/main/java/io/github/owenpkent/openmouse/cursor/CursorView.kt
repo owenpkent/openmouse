@@ -260,10 +260,14 @@ class CursorView(context: Context) : View(context) {
     private fun report(event: MotionEvent) {
         cursorX = event.x
         cursorY = event.y
-        // Buttons first, so a move with a button held is seen as held when the
-        // dwell machine receives it.
-        onButtonsChanged?.invoke(event.buttonState != 0)
+        // A press is reported before the position, so a move with a button
+        // held is seen as held when the dwell machine receives it; a release is
+        // reported after, so the lock it leaves anchors on what the pointer is
+        // over when the button comes up (the same order as the API 34+ path).
+        val held = event.buttonState != 0
+        if (held) onButtonsChanged?.invoke(true)
         onMove?.invoke(cursorX, cursorY)
+        if (!held) onButtonsChanged?.invoke(false)
         invalidate()
     }
 
