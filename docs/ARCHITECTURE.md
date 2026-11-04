@@ -70,7 +70,7 @@ edges, each guarded:
    leave the overlay stuck non-touchable and freeze the cursor). The bookkeeping
    is the pure `PassthroughGate`: the watchdog deadline belongs to the *oldest*
    outstanding gesture and later gestures never push it out, so a repeating
-   scroll (one notch per dwell period) cannot keep postponing recovery after a
+   scroll (one notch per repeat interval) cannot keep postponing recovery after a
    lost callback.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works

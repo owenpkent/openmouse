@@ -105,7 +105,10 @@ class OpenMouseSettings(context: Context) {
         // second at the usual three lines per notch, fast enough to read a page
         // by and slow enough to stop on the line you want.
         const val DEFAULT_SCROLL_REPEAT_MS = 400
-        const val MIN_SCROLL_REPEAT_MS = 100
+        // The floor sits above the 250 ms scroll stroke (GestureDispatcher): on API
+        // 34+ dispatchGesture cancels an in-flight gesture, so a faster repeat would
+        // cut each notch short and scroll less, not more.
+        const val MIN_SCROLL_REPEAT_MS = 300
         const val MAX_SCROLL_REPEAT_MS = 2000
 
         const val DEFAULT_CURSOR_SCALE = 1.0f

@@ -375,7 +375,8 @@ class DwellMachineTest {
         @Test
         fun rearmInPlaceFiresAgainWithoutMovement() {
             // Scroll is the one mode that does not lock after firing: the caller
-            // re-arms in place and another notch lands each dwell period.
+            // re-arms in place and another notch lands each repeat interval (the dwell
+            // time here, since this machine has no separate interval).
             val m = machine()
             arm(m)
             assertTrue(m.poll(100L).clicked)
