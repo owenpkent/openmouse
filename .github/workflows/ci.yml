@@ -1,9 +1,34 @@
+# The pull request and main-branch checks. Two build jobs and one aggregate:
+#
+# - `build-test-lint` is the fast job: the debug APK, the JVM unit tests (which
+#   also replay the fuzz seed corpus), and lint on the debug variant. The pre-push
+#   hook (.githooks/pre-push) runs the same tests and lint before every push.
+# - `release-build` builds and lints the release variant, unsigned, so a change
+#   that only breaks release (a ProGuard rule, a resource the debug build has and
+#   release shrinks away) fails here and not on the owner's machine at release
+#   time. Signing never happens in CI: keystore.properties is gitignored, and the
+#   build falls back to an unsigned APK without it. The file is kept a week for a
+#   look, not for use.
+# - `Tests` needs both and fails if either did not succeed. Branch protection on
+#   main requires that one check, so a job added here is covered by adding it to
+#   the aggregate's `needs` and its check below; see CONTRIBUTING.md, Gates.
+#
+# Actions are pinned to a commit, with the tag in a comment, and the checkout
+# keeps no credentials, so a compromised tag or a step that runs project code
+# cannot push. Dependabot (when added) moves the pins.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+
+# A newer push to the same branch makes the older run pointless. Not on main:
+# each commit there has a group of its own, so a merge right after another never
+# cancels the run that tests it.
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,14 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
@@ -35,7 +62,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reports
           path: |
@@ -44,7 +71,69 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  release-build:
+    name: Release build and lint (unsigned)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+
+      # Minified and shrunk, the way a release ships. No keystore.properties in
+      # CI, so the APK comes out unsigned.
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Lint release
+        run: ./gradlew lintRelease --no-daemon
+
+      - name: Upload release lint report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-reports
+          path: app/build/reports/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 7
+
+  # The one check branch protection requires. It runs whatever happened above
+  # and fails unless every job it needs succeeded, so a failed or cancelled job
+  # can never sit next to a green check.
+  tests:
+    name: Tests
+    needs: [build-test-lint, release-build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check that nothing failed or was cancelled
+        env:
+          BUILD_TEST_LINT: ${{ needs.build-test-lint.result }}
+          RELEASE_BUILD: ${{ needs.release-build.result }}
+        run: |
+          bad=0
+          must_pass() {
+            echo "$1: $2"
+            [ "$2" = "success" ] || bad=1
+          }
+          must_pass build-test-lint "$BUILD_TEST_LINT"
+          must_pass release-build "$RELEASE_BUILD"
+          exit $bad

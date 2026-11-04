@@ -1,0 +1,46 @@
+#!/bin/sh
+# Runs what the CI fast job runs before every push: the JVM unit tests (which
+# also replay the fuzz seed corpus) and lint on the debug variant. The release
+# build is left to CI because it takes longer. Keep this in step with the
+# build-test-lint job in .github/workflows/ci.yml. See CONTRIBUTING.md, Gates.
+#
+# Enable:                  ./gradlew installGitHooks
+# By hand:                 git config core.hooksPath .githooks
+# Disable again:           git config --unset core.hooksPath
+# Skip for a single push:  git push --no-verify (do not, to get around a failure)
+
+# A push that only deletes a remote branch has nothing to test.
+only_deletes=1
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$local_sha" in
+    0000000000000000000000000000000000000000) ;;
+    *) only_deletes=0 ;;
+  esac
+done
+if [ "$only_deletes" -eq 1 ]; then
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Git's own shell on Windows does not inherit a JAVA_HOME set for Android
+# Studio, so fall back to the JDK Android Studio ships when nothing else is set.
+if [ -z "$JAVA_HOME" ] && ! command -v java > /dev/null 2>&1; then
+  for jbr in "/c/Program Files/Android/Android Studio/jbr" "$HOME/AppData/Local/Programs/Android Studio/jbr"; do
+    if [ -x "$jbr/bin/java.exe" ] || [ -x "$jbr/bin/java" ]; then
+      JAVA_HOME="$jbr"
+      export JAVA_HOME
+      break
+    fi
+  done
+fi
+
+log="$(git rev-parse --git-dir)/pre-push.log"
+
+echo "pre-push: running the unit tests and lint (./gradlew testDebugUnitTest lintDebug)"
+if ! ./gradlew testDebugUnitTest lintDebug -q > "$log" 2>&1; then
+  echo "pre-push: checks failed, push stopped. Last lines of $log:"
+  tail -n 40 "$log"
+  exit 1
+fi
+echo "pre-push: unit tests and lint passed"

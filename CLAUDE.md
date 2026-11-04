@@ -24,7 +24,7 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 - Build: `./gradlew assembleDebug` (APK at `app/build/outputs/apk/debug/app-debug.apk`).
 - Test: `./gradlew test` (or `./gradlew testDebugUnitTest`). Fuzz locally (ten minutes per target): `JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'`.
 - Pure classes must stay defined for any input (clamp, never throw): the fuzz targets assert that. When adding logic that takes positions, timestamps or settings, extend the matching fuzz target.
-- Lint: `./gradlew lint`. Run `./gradlew test lint` before opening a PR.
+- Lint: `./gradlew lint`. Run `./gradlew test lint` before opening a PR. The pre-push hook (`.githooks/pre-push`, enabled by `./gradlew installGitHooks`) runs the unit tests and `lintDebug` before every push; never push with `--no-verify` to get around a failure. CI (`ci.yml`) adds the unsigned release build and `lintRelease`, and one aggregate `Tests` check that branch protection requires, together with the `Reviewed` status from `review-gate.yml`. The gates are listed in CONTRIBUTING.md; the parity roadmap (what is still to build, and why) is `docs/PARITY.md`: tick items there as they merge.
 - No device: boot an API 34+ AVD, install, grant the `ACCESS_RESTRICTED_SETTINGS` appop, and enable the service over adb (exact commands in CONTRIBUTING.md). A headless emulator cannot drive a real mouse, so the cursor pipeline is covered by unit tests, not the emulator.
 
 ## Conventions
