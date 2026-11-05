@@ -62,7 +62,7 @@ if ($dirty) { Fail "the working tree is not clean; a release is built from the t
 $tagCommit = git rev-parse --verify --quiet "$tag^{commit}"
 if ($LASTEXITCODE -ne 0 -or -not $tagCommit) { Fail "tag $tag does not exist; tag and sign first (docs/RELEASING.md)" }
 $head = git rev-parse HEAD
-if ($head -ne $tagCommit) { Fail "HEAD ($head) is not the commit $tag points at ($tagCommit); run `git checkout $tag` first" }
+if ($head -ne $tagCommit) { Fail "HEAD ($head) is not the commit $tag points at ($tagCommit); run git checkout $tag first" }
 
 # --- 2. Verify the tag -----------------------------------------------------
 $sh = Get-Command sh -ErrorAction SilentlyContinue
@@ -108,7 +108,7 @@ $notesFile = Join-Path $distDir "openmouse-$tag.notes.md"
 git tag -l --format='%(contents)' $tag | Out-File -Encoding utf8 $notesFile
 
 gh release view $tag *> $null
-if ($LASTEXITCODE -eq 0) { Fail "a GitHub Release for $tag already exists; delete it or upload the asset with `gh release upload $tag $asset`" }
+if ($LASTEXITCODE -eq 0) { Fail "a GitHub Release for $tag already exists; delete it or upload the asset with: gh release upload $tag $asset" }
 
 $args = @("release", "create", $tag, $asset, "$asset.sha256", "--verify-tag", "--title", "OpenMouse $version", "--notes-file", $notesFile)
 if ($Draft) { $args += "--draft" }

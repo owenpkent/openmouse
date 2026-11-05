@@ -116,6 +116,23 @@ jobs:
       - name: Lint release
         run: ./gradlew lintRelease --no-daemon
 
+      # The release scripts are not exercised by any Gradle test. Parse the
+      # PowerShell publisher (a stray backtick once escaped a closing quote and
+      # broke the whole file) and run the tag verifier's usage and
+      # unsigned-tag paths, so a release day does not start with a syntax error.
+      - name: Release scripts parse and refuse what they should
+        shell: bash
+        run: |
+          pwsh -NoProfile -Command '
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile("scripts/publish-release.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+            Write-Host "publish-release.ps1 parses"'
+          sh scripts/verify-release-tag.sh bad && exit 1 || [ $? -eq 2 ]
+          git -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
+          if sh scripts/verify-release-tag.sh v9.9.9; then echo "::error::an unsigned tag verified"; exit 1; fi
+          git tag -d v9.9.9
+
       - name: Upload release lint report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
