@@ -229,9 +229,10 @@ class Device:
     def leave_dock(self, px=700):
         """
         Blind glide away from the right edge. Opening the dock shifts the strip
-        on a short screen and can put a cell under the still pointer; a cell
-        under a pointer that then jitters across its edge arms at once, so get
-        clear of the whole panel before the next screenshot pause.
+        on a short screen and can put a cell under or beside the still pointer.
+        The dwell machine refuses a cell entered within the lock's tolerance,
+        but the wiggle that keeps countdowns from firing between screenshots is
+        wider than that tolerance, so get clear of the whole panel first.
         """
         self.glide(-px / self.gain, 0)
         time.sleep(0.2)

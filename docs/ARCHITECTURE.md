@@ -106,14 +106,23 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 - **Rest keys.** On every move the service hands the machine the menu entry under
   the cursor (or null over the app). While that key is unchanged the entry itself
   is the tolerance: a tremor inside a menu cell, however large, neither restarts
-  the countdown nor re-fires the entry. Entering a cell starts its countdown at
-  once. Leaving a cell for the app locks and the ordinary distance applies from
-  the rest point, so a slip into the gap between cells, or a menu that re-lays
-  out under a still pointer (the strip shifts on short screens), never taps the
-  app. After a menu choice, a dock change, or a resize (`CursorView` reports
-  every re-layout), the service re-feeds the entry now under the pointer before
-  locking, for the same reason. This is the PowerToys toolbar rule ("an
-  activated button will not fire again until the pointer leaves it").
+  the countdown nor re-fires the entry. Entering a cell while a countdown is
+  running starts the cell's countdown at once: the cell edge is the deliberate
+  act.
+  Entering one while the machine is locked is not enough on its own; the pointer
+  must also clear the lock's tolerance from the lock anchor, since a lock is
+  cleared by deliberate movement and nothing else. That is what keeps a tremor
+  across a cell edge from selecting the neighbour after a menu choice, and what
+  keeps the dock from selecting a cell it laid out beside a still pointer when
+  it opened (the collapsed handle is taller than a cell, so opening it can leave
+  the pointer in a gap with cells 1 px away). Leaving a cell for the app locks
+  and the ordinary distance applies from the rest point, so a slip into the gap
+  between cells, or a menu that re-lays out under a still pointer (the strip
+  shifts on short screens), never taps the app. After a menu choice, a dock
+  change, or a resize (`CursorView` reports every re-layout), the service
+  re-feeds the entry now under the pointer before locking, for the same reason.
+  This is the PowerToys toolbar rule ("an activated button will not fire again
+  until the pointer leaves it").
 - **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
   not on the menu, so a user who cannot click can still reach Resume. It locks in
   both directions, so time spent paused never counts toward a countdown. The

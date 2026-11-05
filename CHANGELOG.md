@@ -15,6 +15,13 @@ tagged release.
   pause / play). Smaller cells, nothing to translate, and the same adaptive
   widening on short screens. Collapsed, only a slim handle stays on the edge;
   the pointer stops at the screen edge, so the handle is easy to reach.
+- Entering a menu cell while dwell clicking is locked (after a menu choice, a
+  physical click, or the dock re-laying out under a still pointer) no longer
+  arms the cell by itself: the pointer must first clear the movement tolerance
+  from where it locked. A tremor across a cell edge cannot select the
+  neighbour, and opening the dock from its tall handle cannot select a cell
+  that lands 1 px from the pointer. Entering a cell during a running countdown
+  still arms it at once.
 
 ### Added
 
