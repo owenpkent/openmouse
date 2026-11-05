@@ -309,6 +309,12 @@ the network**, and it is built to stay narrow:
   `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
   Settings section and skips the launch check; the F-Droid recipe passes it,
   because F-Droid signs with its own key and ships updates itself.
+- **No retained state.** Every callback checks that the activity that asked
+  for it is still alive (`UpdatePrompt.shouldDeliver`: neither finishing nor
+  destroyed) and otherwise drops the result. Rotating or leaving Settings
+  mid-download therefore never shows a dialog on, or launches the installer
+  from, a screen that is gone; the file stays in the cache and the next check
+  offers it again.
 
 The decisions (what counts as a release, which version is newer, which URLs
 are allowed) live in the pure `ReleaseFeed` and are unit-tested; `UpdateChecker`

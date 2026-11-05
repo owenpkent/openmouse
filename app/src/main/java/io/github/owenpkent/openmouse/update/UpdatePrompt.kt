@@ -18,13 +18,30 @@ import io.github.owenpkent.openmouse.R
  *
  * Nothing here is automatic: the user sees the release notes and chooses, and
  * the system installer asks once more before anything is replaced.
+ *
+ * Every callback belongs to the activity that started it. If that activity is
+ * finishing or destroyed by the time a result arrives (the screen rotated, or
+ * the user left Settings mid-download), the result is dropped: no dialog is
+ * shown on it, its views are left alone, and the installer is not launched
+ * from a screen the user can no longer see. There is no retained state; the
+ * downloaded file stays in the cache and the next "Check for updates now"
+ * offers it again.
  */
 object UpdatePrompt {
 
     private const val MAX_NOTES_CHARS = 2000
 
+    /**
+     * Whether a result may still reach the activity it was requested from. Kept
+     * pure (no Activity) so the rule can be unit tested; [alive] feeds it the
+     * real flags.
+     */
+    internal fun shouldDeliver(isFinishing: Boolean, isDestroyed: Boolean): Boolean = !isFinishing && !isDestroyed
+
+    private fun alive(activity: Activity): Boolean = shouldDeliver(activity.isFinishing, activity.isDestroyed)
+
     fun show(activity: Activity, checker: UpdateChecker, release: Release, onStatus: (CharSequence) -> Unit = {}) {
-        if (activity.isFinishing || activity.isDestroyed) return
+        if (!alive(activity)) return
         val notes = release.notes.trim().let { if (it.length > MAX_NOTES_CHARS) it.take(MAX_NOTES_CHARS) + "…" else it }
         MaterialAlertDialogBuilder(activity)
             .setTitle(activity.getString(R.string.update_dialog_title, release.version))
@@ -35,6 +52,7 @@ object UpdatePrompt {
     }
 
     private fun download(activity: Activity, checker: UpdateChecker, release: Release, onStatus: (CharSequence) -> Unit) {
+        if (!alive(activity)) return
         // Built in code rather than inflated: a dialog's content view has no
         // parent at inflation time, and this is three widgets.
         val pad = (24 * activity.resources.displayMetrics.density).toInt()
@@ -58,13 +76,15 @@ object UpdatePrompt {
 
         checker.download(
             release,
-            onProgress = { percent ->
+            onProgress = onProgress@{ percent ->
+                if (ownerGone(activity, progress)) return@onProgress
                 bar.progress = percent
                 label.text = activity.getString(R.string.update_status_downloading, percent)
                 onStatus(label.text)
             },
-            callback = { result ->
-                if (!activity.isFinishing && !activity.isDestroyed) progress.dismiss()
+            callback = callback@{ result ->
+                if (ownerGone(activity, progress)) return@callback
+                progress.dismiss()
                 when (result) {
                     is UpdateChecker.DownloadResult.Failed -> {
                         report(activity, onStatus, activity.getString(R.string.update_status_failed, result.message))
@@ -85,13 +105,27 @@ object UpdatePrompt {
     }
 
     /**
+     * True when the activity that started the download is gone, in which case
+     * the calling callback must stop here: a destroyed activity drops the
+     * result (see the class doc). Takes the progress dialog down first while
+     * its window still exists. A finishing activity keeps its window until it
+     * is destroyed; a destroyed one has already lost it, and dismissing then
+     * would throw.
+     */
+    private fun ownerGone(activity: Activity, progress: AlertDialog): Boolean {
+        if (alive(activity)) return false
+        if (!activity.isDestroyed && progress.isShowing) progress.dismiss()
+        return true
+    }
+
+    /**
      * A terminal message goes both to the status sink and to a plain dialog, so
      * the launch path (which has no status line) still tells the user what
      * happened instead of silently doing nothing.
      */
     private fun report(activity: Activity, onStatus: (CharSequence) -> Unit, message: String) {
         onStatus(message)
-        if (activity.isFinishing || activity.isDestroyed) return
+        if (!alive(activity)) return
         MaterialAlertDialogBuilder(activity)
             .setMessage(message)
             .setPositiveButton(android.R.string.ok, null)
