@@ -46,7 +46,10 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: manual
       - name: Build (traced by CodeQL)
-        run: ./gradlew assembleDebug --no-daemon
+        # A clean build with the build cache off: setup-gradle restores the cache
+        # and gradle.properties enables it, so compileDebugKotlin could come back
+        # FROM-CACHE and CodeQL would see no Kotlin compilation at all.
+        run: ./gradlew clean assembleDebug --no-daemon --no-build-cache
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           category: "/language:${{ matrix.language }}"
