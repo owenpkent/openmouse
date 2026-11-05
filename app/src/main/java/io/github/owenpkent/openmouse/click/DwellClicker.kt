@@ -48,8 +48,8 @@ class DwellClicker(
     /**
      * Lock at the current position so a resting mouse does not immediately
      * dwell-click again (e.g. right after a physical-button click or a menu
-     * choice). The next move past the threshold, or into a different target,
-     * unlocks it.
+     * choice). The next move past the threshold unlocks it, whichever target
+     * it lands on.
      */
     fun lockUntilMove() {
         machine.lockUntilMove()

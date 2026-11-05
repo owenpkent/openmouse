@@ -81,8 +81,8 @@ two input-capture paths and how injected gestures reach the app below.
   countdown for feedback
 - Standard click: a physical left-button press taps immediately
 - Scroll wheel scrolls the content under the cursor
-- On-screen gesture menu (collapsible grid, left or right edge, widens on short
-  screens so every entry stays reachable)
+- On-screen gesture dock (symbols, not words; flush with the left or right
+  edge; widens on short screens so every entry stays reachable)
 
 <p>
   <img src="docs/media/dwell-demo-portrait.gif" width="270" alt="Dwell clicking on an emulator: the menu opens by dwell, Pause stops clicks on the app, Resume brings them back, and a dwell launches Photos">

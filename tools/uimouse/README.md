@@ -65,3 +65,9 @@ documented at the top of `uimouse.c`.
   shifts up). `menu_cell_center` mirrors `MenuGeometry` and takes `expanded`.
 - **screenrecord only emits frames on screen change**, so the driver nudges
   the pointer right after starting a recording or the opening state is cut.
+- **Opening the dock can move it under the pointer.** On a short screen the
+  strip shifts up to fit, so after the expand dwell fires the still pointer is
+  over whatever landed there. A cell is safe (the service re-anchors and locks
+  on it); the gap between rows is not (a jitter into the cell above arms it).
+  `menu_cell_center` picks a handle entry height that ends up inside row 0,
+  and `leave_dock` glides clear right after the expand.
