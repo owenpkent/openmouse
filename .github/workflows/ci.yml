@@ -129,7 +129,7 @@ jobs:
             if ($errors) { $errors | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
             Write-Host "publish-release.ps1 parses"'
           sh scripts/verify-release-tag.sh bad && exit 1 || [ $? -eq 2 ]
-          git -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
+          git -c user.name=ci -c user.email=ci@invalid -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
           if sh scripts/verify-release-tag.sh v9.9.9; then echo "::error::an unsigned tag verified"; exit 1; fi
           git tag -d v9.9.9
 
