@@ -68,6 +68,14 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getBoolean(KEY_MENU_RIGHT, true)
         set(value) = prefs.edit { putBoolean(KEY_MENU_RIGHT, value) }
 
+    /**
+     * Whether opening the app checks GitHub Releases for a newer version. Off by
+     * default: the update check is the app's only network use, so it is opt-in.
+     */
+    var updateCheckOnLaunch: Boolean
+        get() = prefs.getBoolean(KEY_UPDATE_CHECK_ON_LAUNCH, false)
+        set(value) = prefs.edit { putBoolean(KEY_UPDATE_CHECK_ON_LAUNCH, value) }
+
     /** The resolved cursor color (ARGB int) for the current index. */
     val cursorColor: Int get() = CURSOR_COLORS[cursorColorIndex]
 
@@ -88,6 +96,7 @@ class OpenMouseSettings(context: Context) {
         private const val KEY_CURSOR_SCALE = "cursor_scale"
         private const val KEY_CURSOR_COLOR = "cursor_color"
         private const val KEY_MENU_RIGHT = "menu_right"
+        private const val KEY_UPDATE_CHECK_ON_LAUNCH = "update_check_on_launch"
 
         const val DEFAULT_DWELL_MS = 1000
         const val MIN_DWELL_MS = 400

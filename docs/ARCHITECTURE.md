@@ -17,6 +17,9 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `OpenMouseSettings` | Typed, range-clamped wrapper over SharedPreferences. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 | `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
+| `ReleaseFeed` | **Pure** GitHub release parsing, version comparison and URL allow-list (unit tested). |
+| `UpdateChecker` | Fetches the release feed and APK, checks the signing certificate, hands off to the installer. |
+| `UpdatePrompt` | The "new version" dialog shared by Settings and the launch check. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
 `DwellClicker`, and on a dwell becomes a `tap(x, y)` through `GestureDispatcher`.
@@ -272,6 +275,50 @@ Because the settings screen and the service run in the same process, they share
 one SharedPreferences instance, so the listener fires on the main thread and the
 view updates are safe. The result is that tuning a slider moves the cursor on
 screen immediately.
+
+## Updates
+
+Sideloading from GitHub Releases is the only live channel, so the app can look
+for its own updates there. This is the **only code in OpenMouse that touches
+the network**, and it is built to stay narrow:
+
+- **Opt-in.** `UpdateChecker.check` runs when the user presses "Check for
+  updates now" in Settings, or at launch if `updateCheckOnLaunch` is on (default
+  off, once per process). There is no scheduled job and no background service.
+- **Two hosts.** The feed is `GET api.github.com/repos/owenpkent/openmouse/
+  releases/latest` with an `Accept: application/vnd.github+json` header and a
+  `OpenMouse/<version>` user agent (GitHub requires one); nothing else is sent.
+  The APK may only be fetched from
+  `https://github.com/owenpkent/openmouse/releases/download/`
+  (`ReleaseFeed.isAllowedDownloadUrl`). Redirects are followed by hand, at most
+  five, https only, and each hop must land on `github.com` or a
+  `*.githubusercontent.com` host (`isAllowedRedirectHost`); the platform's
+  automatic following would go anywhere the server said.
+- **Caps.** The feed body is capped at 1 MiB and the APK at 100 MiB; when the
+  release lists the asset size, the download must match it exactly. The file
+  lands in `cache/updates/` and is exposed to the installer through a
+  `FileProvider` scoped to that one folder (`res/xml/file_paths.xml`).
+- **Same key or nothing.** Before the installer sees the file,
+  `signatureMatches` reads the archive's signing certificates
+  (`GET_SIGNING_CERTIFICATES` on API 28+, `GET_SIGNATURES` before) and requires
+  the set to equal the installed app's, and the package name to be ours. A
+  mismatch deletes the file and tells the user; it is never offered to the
+  install flow. The system installer then asks the user itself, and on API 26+
+  the app first sends them to grant "install unknown apps" if it has not been.
+- **Compile-out.** `BuildConfig.UPDATER_ENABLED` comes from the Gradle property
+  `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
+  Settings section and skips the launch check; the F-Droid recipe passes it,
+  because F-Droid signs with its own key and ships updates itself.
+- **No retained state.** Every callback checks that the activity that asked
+  for it is still alive (`UpdatePrompt.shouldDeliver`: neither finishing nor
+  destroyed) and otherwise drops the result. Rotating or leaving Settings
+  mid-download therefore never shows a dialog on, or launches the installer
+  from, a screen that is gone; the file stays in the cache and the next check
+  offers it again.
+
+The decisions (what counts as a release, which version is newer, which URLs
+are allowed) live in the pure `ReleaseFeed` and are unit-tested; `UpdateChecker`
+is the Android wrapper around sockets, `PackageManager` and intents.
 
 ## Coordinate space
 

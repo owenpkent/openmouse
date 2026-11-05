@@ -10,6 +10,9 @@ junitPlatform = "1.14.4"
 # Jazzer is the JVM libFuzzer: the fuzz tests under app/src/test/.../fuzz run as
 # plain JUnit tests (replaying the seed corpus) unless JAZZER_FUZZ=1 is set.
 jazzer = "0.30.0"
+# Android ships org.json in the platform; the JVM unit tests need the real
+# library because the mockable android.jar stubs it out.
+orgJson = "20250517"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -18,6 +21,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version.ref = "junitPlatform" }
 jazzer-junit = { group = "com.code-intelligence", name = "jazzer-junit", version.ref = "jazzer" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

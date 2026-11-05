@@ -8,6 +8,9 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import io.github.owenpkent.openmouse.service.MouseAccessibilityService
+import io.github.owenpkent.openmouse.settings.OpenMouseSettings
+import io.github.owenpkent.openmouse.update.UpdateChecker
+import io.github.owenpkent.openmouse.update.UpdatePrompt
 
 /**
  * Onboarding screen. OpenMouse has no UI of its own once running -- the cursor
@@ -34,6 +37,27 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         findViewById<Button>(R.id.refreshButton).setOnClickListener { updateStatus() }
+
+        maybeCheckForUpdates()
+    }
+
+    /**
+     * The opt-in launch check. It runs once per process, only when the user has
+     * turned it on in Settings, and stays quiet unless a newer release exists:
+     * "up to date" and failures are not worth interrupting the onboarding
+     * screen for. The build flag removes it entirely from F-Droid builds.
+     */
+    private fun maybeCheckForUpdates() {
+        if (!BuildConfig.UPDATER_ENABLED || checkedThisProcess) return
+        if (!OpenMouseSettings(this).updateCheckOnLaunch) return
+        checkedThisProcess = true
+        val checker = UpdateChecker(this)
+        checker.check { result ->
+            if (isFinishing || isDestroyed) return@check
+            if (result is UpdateChecker.Result.Available) {
+                UpdatePrompt.show(this, checker, result.release)
+            }
+        }
     }
 
     override fun onResume() {
@@ -60,5 +84,10 @@ class MainActivity : AppCompatActivity() {
             if (splitter.next().equals(expectedId, ignoreCase = true)) return true
         }
         return false
+    }
+
+    companion object {
+        /** Set once the launch check has run, so rotation or re-opening does not repeat it. */
+        private var checkedThisProcess = false
     }
 }
