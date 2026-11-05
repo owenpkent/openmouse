@@ -27,6 +27,12 @@ tagged release.
   between nights, and a finding opens (or comments on) a `Fuzz crash: <target>`
   issue with the input, where it goes, and the end of the log, instead of
   leaving an artifact nobody is told about.
+- Release machinery: a release is a signed `vX.Y.Z` tag verified against the
+  committed `release-signers` file (`scripts/verify-release-tag.sh`),
+  `scripts/publish-release.ps1` builds the signed APK from a verified tag and
+  publishes the GitHub Release with the tag message as notes, and a unit test
+  pins `versionName` and `versionCode` to the changelog, the fastlane changelog
+  and the F-Droid metadata so a half-done bump fails in CI.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in

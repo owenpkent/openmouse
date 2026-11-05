@@ -1,0 +1,35 @@
+# The keys allowed to sign an OpenMouse release tag (docs/RELEASING.md, "Signed
+# release tags").
+#
+# Format: OpenSSH allowed_signers, one key per line:
+#
+#   <principal> namespaces="git" <keytype> <key>
+#
+# scripts/verify-release-tag.sh checks a vX.Y.Z tag against this file alone
+# (`git verify-tag` with gpg.ssh.allowedSignersFile pointing here), so a key in
+# the owner's own git configuration does not count, and scripts/publish-release.ps1
+# refuses to build a release from a tag that does not verify. The in-app updater
+# does not read this file: Android itself refuses an APK whose signing
+# certificate differs from the installed app's, and the updater checks that
+# before handing the file to the installer. With no key here, no release tag can
+# verify.
+#
+# One-time setup, done once by the owner of the repository:
+#
+#   ssh-keygen -t ed25519 -f ~/.ssh/openmouse-release -C openmouse-release
+#   git config gpg.format ssh
+#   git config user.signingkey ~/.ssh/openmouse-release.pub
+#
+# then add the public key as a line here, in the form above, with the key type
+# and key (the second and third fields of the .pub file), and commit it. A fork
+# keeps its own key and its own copy of this file. Lines starting with # are
+# comments.
+#
+# The two keys below are the owner's existing release keys, shared with the
+# Polaris repository (its release-signers file): the ed25519 release key, and the
+# RSA key of the OK Studio Inc. EV code-signing certificate on the SafeNet eToken
+# (`ssh-keygen -i -m PKCS8` of its public key). The verify script here checks SSH
+# signatures only; a tag signed with the certificate (X.509) needs the Polaris
+# verifier.
+polaris-release namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILqqDqiDvDnDm6Cf2PgA9bw/YNR7UNACBhbPc0A9My4t
+ok-studio-ev namespaces="git" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDQzCzIzsvuRRF8HILGdXRahx/LH35JW/dUFJlxCvDdzvTdjwldrM93YPB/nCs0A+4sTsP1YDCtBOGiN6qBixFw6dbKQR+RgD9icj4rr5xyX/zRq8HLH2o4f76MwjHrEC0pPeiB6c9QDB7FjABZ3t3gl60HTuJGc35jC9FEKPyWVtBqSG3cnhux61D9hSkPTy7VjaZx8qDLvm4m63IuNgUAf//Ung2Aice0qu9gC/XSEdbv9pJ85Ymxbj2mo0bSts98F3/bZcc05daR0w5Z/boxpV8DAXeoVymw5OLvBh4N84I0aNgJ2H1GrsDX3mJMsIWfiepPR2Rn4cr7WN35eba52lXYWm9MhXjTeU1oENYGeCiPqPY6sBAig44k8ohdyT9LJ9aM+oraXsX9VoWxjDYdmzNi0dxHKyRoW1rhMM+Yqf6CxnLCg3dlmelWbFp6jIaZwVRQ7GOjrFTDIDSx2rW4w0g2BSppAcqR28BFAmOteH2KZMA/7TnzuqtF7vKV5AdG2jJc4qbHQLu5VvDFpKn1Ti0keTiWJBDgsXy532AkAeA0x8ox5JSiEyszhmtQjtJ3bMIhqWo+1gzs/l/IFKnDmDP2hX/dzsX96ZGYH9iPC22dkr6wP7Ibi7w7wI69sGpE42SsDfFCqyHM5IEX9ZTAtg0jtlwSvpozSkXH5RDgNQ==
