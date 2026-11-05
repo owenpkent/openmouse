@@ -60,6 +60,12 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --no-daemon
 
+      # The nightly fuzz workflow's reproducer collection is shell, not Gradle,
+      # so its self-test (plant a crash and a timeout file, collect, assert both
+      # were found, clean up) runs here where every push exercises it.
+      - name: Fuzz findings collector self-test
+        run: sh scripts/collect-fuzz-findings.sh --self-test
+
       # app/gradle.lockfile must describe the build that just ran: OSV-Scanner
       # reads it, and Dependabot edits libs.versions.toml without touching it.
       - name: Check that the dependency lockfile is current

@@ -1,11 +1,23 @@
 name: Nightly fuzz
 
-# Runs the Jazzer fuzz targets under app/src/test/.../fuzz in fuzzing mode for
-# their full @FuzzTest maxDuration (10 minutes each). Any finding fails the job;
-# the reproducing input Jazzer writes next to the seed corpus is uploaded so it
-# can be committed as a permanent regression test.
+# Coverage-guided fuzzing (Jazzer) of the pure cores: the dwell state machine,
+# the menu geometry, and the legacy passthrough gate. Each target under
+# app/src/test/.../fuzz runs in fuzzing mode for its full @FuzzTest maxDuration
+# (10 minutes), one job per target because Jazzer fuzzes one target per JVM.
+# Nothing here is a pull request check: fuzzing is open-ended by nature, so it
+# runs nightly and reports through issues instead of failing pull requests. On
+# every ordinary `gradlew test` the same targets only replay their seed corpus.
 #
-# Not a pull request check: fuzzing is open-ended by nature. GitHub stops a
+# The evolved corpus (app/.cifuzz-corpus, gitignored) is the point of running
+# nightly: each run starts from the last one's coverage. Every run saves it under
+# a fresh cache key and restores the newest one for its target.
+#
+# A finding fails the job. Jazzer writes the reproducing input next to the seed
+# corpus (app/src/test/resources/**/<Target>Inputs/<method>/crash-<hash>); the job
+# collects every new file there, uploads it, and the report job opens the issue
+# "Fuzz crash: <target>" (or comments on it when it is already open) with the
+# input in base64, the run, and the end of the fuzzer log. Only the report job
+# may write issues; the fuzzing jobs run with read access. GitHub stops a
 # schedule after 60 days without a commit; a manual run restarts it. Actions are
 # pinned to a commit (tag in the comment) and the checkout keeps no credentials.
 
@@ -25,9 +37,13 @@ permissions:
 
 jobs:
   fuzz:
-    name: Fuzz pure cores (Jazzer)
+    name: Fuzz ${{ matrix.target }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [DwellMachineFuzzTest, MenuGeometryFuzzTest, PassthroughGateFuzzTest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -40,20 +56,125 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
 
+      - name: Restore the evolved corpus
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: app/.cifuzz-corpus
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+
       - name: Fuzz
+        # Explicit, so the step runs with pipefail and a finding fails it through tee.
+        shell: bash
         env:
           JAZZER_FUZZ: "1"
-        run: ./gradlew testDebugUnitTest --tests '*FuzzTest' --no-daemon
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p findings
+          ./gradlew testDebugUnitTest --tests "*$TARGET" --no-daemon 2>&1 | tee findings/fuzz.log
 
-      - name: Upload findings and reports
+      # Save even when the fuzzer found something, so the run's coverage is kept.
+      - name: Save the evolved corpus
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: app/.cifuzz-corpus
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+
+      # Jazzer puts a reproducer next to the seed corpus of the target that
+      # failed, or (if it could not find the seed directory) in the working
+      # directory. Any such file git does not track is a finding; the script
+      # copies it with its path so the issue can say where it goes. It finds
+      # files itself rather than asking git status, so an ignore pattern can
+      # never hide a reproducer; ci.yml runs its self-test on every push.
+      - name: Collect new reproducers
+        if: failure()
+        run: |
+          sh scripts/collect-fuzz-findings.sh findings
+          ls -R findings
+
+      - name: Upload the findings and the log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: fuzz-findings
+          name: fuzz-findings-${{ matrix.target }}
           path: |
-            app/src/test/resources/**/*FuzzTestInputs/
-            app/crash-*
-            app/timeout-*
+            findings/
             app/build/test-results/testDebugUnitTest/
             app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
+          retention-days: 30
+
+  # Kept apart from the jobs that run the fuzzer so they never hold a token that
+  # can write issues.
+  report:
+    name: Report findings
+    needs: fuzz
+    if: always() && needs.fuzz.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Download the findings
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: fuzz-findings-*
+          path: artifacts
+
+      - name: Open or update issues
+        run: |
+          shopt -s nullglob globstar
+          for dir in artifacts/fuzz-findings-*; do
+            target="${dir#artifacts/fuzz-findings-}"
+            inputs=("$dir"/findings/**/crash-* "$dir"/findings/**/timeout-* "$dir"/findings/**/slow-unit-* "$dir"/findings/**/oom-*)
+            # No input file means the target failed some other way (build or
+            # install); the failed job in the run says why, so there is no issue.
+            [ ${#inputs[@]} -gt 0 ] || { echo "$target: no reproducer, skipping"; continue; }
+            title="Fuzz crash: $target"
+            first="${inputs[0]}"
+            rel="${first#"$dir"/findings/}"
+            size=$(wc -c < "$first")
+            {
+              echo "The nightly fuzz run found an input that makes the \`$target\` target fail."
+              echo
+              echo "- Run: $RUN_URL (artifact \`fuzz-findings-$target\`, file \`$rel\`, kept 30 days)"
+              echo "- Commit: $SHA"
+              echo
+              echo "Replay: put the file back at \`$rel\` (the seed corpus directory of the test that failed) and run"
+              echo
+              echo '```sh'
+              echo "./gradlew testDebugUnitTest --tests '*$target'"
+              echo '```'
+              echo
+              echo "which replays it as an ordinary test. Fix the bug, then commit the file where it is so it stays a permanent regression test (see CONTRIBUTING.md, Gates). Do not weaken the invariants in the target."
+              echo
+              echo "Input ($size bytes, base64; a larger input is in the artifact only):"
+              echo '```'
+              if [ "$size" -le 4000 ]; then base64 -w 76 "$first"; else echo "(see artifact)"; fi
+              echo '```'
+              echo
+              echo '<details><summary>End of the fuzzer log</summary>'
+              echo
+              echo '```'
+              # Printed as data: the log quotes the input, which can hold anything.
+              tail -n 40 "$dir/findings/fuzz.log" | sed 's/```/` ` `/g'
+              echo '```'
+              echo '</details>'
+            } > body.md
+            number=$(gh issue list --state open --search "\"$title\" in:title" \
+              --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body-file body.md
+              echo "commented on #$number for $target"
+            else
+              gh issue create --title "$title" --body-file body.md --label bug
+              echo "opened an issue for $target"
+            fi
+          done
