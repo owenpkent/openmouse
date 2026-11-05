@@ -83,19 +83,14 @@ jobs:
 
       # Jazzer puts a reproducer next to the seed corpus of the target that
       # failed, or (if it could not find the seed directory) in the working
-      # directory. Anything new under either is a finding; copy it with its path
-      # so the issue can say where it goes.
+      # directory. Any such file git does not track is a finding; the script
+      # copies it with its path so the issue can say where it goes. It finds
+      # files itself rather than asking git status, so an ignore pattern can
+      # never hide a reproducer; ci.yml runs its self-test on every push.
       - name: Collect new reproducers
         if: failure()
         run: |
-          git status --porcelain --untracked-files=all -- app/src/test/resources app \
-            | awk '$1 == "??" { print $2 }' \
-            | grep -E '/(crash|timeout|slow-unit|oom)-[0-9a-f]+$|^app/(crash|timeout|slow-unit|oom)-' \
-            | while read -r f; do
-                mkdir -p "findings/$(dirname "$f")"
-                cp "$f" "findings/$f"
-                echo "finding: $f"
-              done
+          sh scripts/collect-fuzz-findings.sh findings
           ls -R findings
 
       - name: Upload the findings and the log
