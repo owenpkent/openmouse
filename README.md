@@ -14,8 +14,9 @@ with or endorsed by Ease Apps.
 > **Status: v0.1.0, an early release.** The cursor follows the mouse with dwell
 > and standard clicks; an on-screen menu adds double-tap, long-press, drag,
 > swipe, scroll, and Back / Home / Recent / Notifications / Quick Settings; and a
-> live settings screen tunes it. The logic is unit tested and the app is verified
-> on an emulator. Remaining roadmap items (tremor filter, pinch-to-zoom) are
+> live settings screen tunes it. The logic is unit tested and fuzzed, and an
+> automated UI test suite drives the cursor end to end on Android 11 and 14
+> emulators in CI. Remaining roadmap items (tremor filter, pinch-to-zoom) are
 > below.
 
 ## Install
@@ -117,6 +118,7 @@ Kotlin plugin), targets **SDK 36**, and the committed Gradle wrapper pins
 # Or from the command line:
 ./gradlew assembleDebug   # build the APK
 ./gradlew test            # run the unit tests
+./gradlew connectedDebugAndroidTest   # run the UI tests (emulator or device)
 ```
 
 If Android Studio does not create `local.properties`, add it with your SDK path:
@@ -148,16 +150,31 @@ app/src/main/
 │   ├── menu/GestureMenu.kt             menu: drawing + action mapping
 │   ├── menu/MenuGeometry.kt            pure layout + hit-testing (unit tested)
 │   ├── settings/OpenMouseSettings.kt   SharedPreferences-backed settings
-│   └── gesture/GestureDispatcher.kt    dispatchGesture() wrapper
+│   ├── gesture/GestureDispatcher.kt    builds injections, dispatchGesture() wrapper
+│   ├── gesture/PassthroughGate.kt      pure legacy click-through bookkeeping (unit tested)
+│   └── gesture/SwallowedGestureTracker.kt  pure swallowed-gesture detection (unit tested)
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml
 
 app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests (JUnit 5)
 ├── click/DwellMachineTest.kt
 ├── menu/MenuGeometryTest.kt
+├── gesture/PassthroughGateTest.kt
+├── gesture/SwallowedGestureTrackerTest.kt
 └── fuzz/                            Jazzer fuzz targets (run nightly)
     ├── DwellMachineFuzzTest.kt
-    └── MenuGeometryFuzzTest.kt
+    ├── MenuGeometryFuzzTest.kt
+    ├── PassthroughGateFuzzTest.kt
+    └── SwallowedGestureTrackerFuzzTest.kt
+
+app/src/androidTest/java/io/github/owenpkent/openmouse/   UI tests (emulator/device)
+├── CursorPipelineTest.kt            drives the cursor end to end
+├── OverlayTest.kt                   overlay safety contract
+├── SettingsActivityTest.kt / MainActivityTest.kt   the two screens (Espresso)
+└── UiTestSupport.kt                 synthetic mouse, service control, helpers
+
+app/src/debug/                       debug builds only
+└── .../testing/TouchRecorderActivity.kt   records where injected touches land
 ```
 
 ## Testing
@@ -168,6 +185,9 @@ classes with no Android dependencies, so it runs as fast JVM unit tests:
 
 - `DwellMachine` -- the dwell-to-click state machine (clock injected, not read)
 - `MenuGeometry` -- the menu's layout and hit-testing
+- `PassthroughGate` -- when the legacy overlay goes click-through and comes back
+- `SwallowedGestureTracker` -- spotting a gesture the legacy overlay swallowed,
+  and deciding whether it is safe to send it again
 
 ```bash
 ./gradlew test          # run all unit tests (fuzz targets replay their seed corpus)
@@ -177,11 +197,11 @@ classes with no Android dependencies, so it runs as fast JVM unit tests:
 The same pure classes are also fuzzed with [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer),
 the JVM libFuzzer, mirroring the fuzz target PowerToys ships for its Dwell Click
 engine. The targets under `app/src/test/.../fuzz/` feed arbitrary event
-sequences, coordinates, timestamps and settings into `DwellMachine` and
-`MenuGeometry` and check invariants after every step (progress stays in 0..1,
-nothing fires before the pointer moves, the same rest never fires twice, hit-test
-results agree with the cell bounds). They run as ordinary unit tests unless
-fuzzing is switched on:
+sequences, coordinates, timestamps and settings into each pure class and check
+invariants after every step (progress stays in 0..1, nothing fires before the
+pointer moves, the same rest never fires twice, hit-test results agree with the
+cell bounds, a gesture that reached the app is never resent). They run as
+ordinary unit tests unless fuzzing is switched on:
 
 ```bash
 JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'   # ten minutes per target
@@ -191,20 +211,43 @@ The [nightly workflow](.github/workflows/nightly-fuzz.yml) runs each target for
 ten minutes and uploads any reproducing input as an artifact; commit it under
 `app/src/test/resources/` to keep it as a regression test.
 
+### UI tests
+
+The Android side is covered end to end by instrumented tests under
+`app/src/androidTest/`, run on an emulator or a device (they enable the service
+themselves):
+
+```bash
+./gradlew connectedDebugAndroidTest
+```
+
+A headless emulator has no mouse, and Android filters shell-injected input out
+of the accessibility callback, so the tests (which run inside the app's process)
+feed synthetic mouse events in where real ones arrive: the service's
+`onMotionEvent` on Android 14+, the cursor overlay on Android 7-13. Everything
+after that is the real code: the dwell timer, the menu, gesture injection and
+the overlay. Injected touches land in a debug-only screen that records where
+they hit, so the tests check that a tap lands exactly under the cross-hair, that
+a resting pointer never clicks twice, and that Pause, Home, double-tap, drag and
+the scroll wheel work. Other tests check the overlay never locks out the
+touchscreen, and cover the settings and main screens. CI runs the suite on API
+30 and API 34 emulators, one per input path.
+
 When adding behavior, prefer putting the logic in a pure class and testing it
-there, keeping the Android wrapper a straight pass-through.
+there, keeping the Android wrapper a straight pass-through. If it changes what
+the cursor does, add a `CursorPipelineTest` case too.
 
 ## Contributing
 
 Issues and pull requests are welcome, especially from the AAC / accessibility
 community. The roadmap items above are good starting points.
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, conventions, emulator testing, and
+- [CONTRIBUTING.md](CONTRIBUTING.md): setup, conventions, emulator testing, and
   how to add a new gesture
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
-- [SECURITY.md](SECURITY.md) — reporting a vulnerability
-- [docs/RELEASING.md](docs/RELEASING.md) — the plan for shipping to F-Droid / Play
-- [docs/UPSTREAMING.md](docs/UPSTREAMING.md) — the plan for getting it into Android
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): community standards
+- [SECURITY.md](SECURITY.md): reporting a vulnerability
+- [docs/RELEASING.md](docs/RELEASING.md): the plan for shipping to F-Droid / Play
+- [docs/UPSTREAMING.md](docs/UPSTREAMING.md): the plan for getting it into Android
   natively (AOSP / LineageOS)
 
 ## License

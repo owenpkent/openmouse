@@ -13,7 +13,9 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `DwellMachine` | **Pure** dwell-to-click state machine (unit tested). |
 | `GestureMenu` | Menu drawing and cell-to-action mapping. |
 | `MenuGeometry` | **Pure** menu layout and hit-testing (unit tested). |
-| `GestureDispatcher` | Injects taps, drags, swipes, and scrolls via `dispatchGesture()`. |
+| `GestureDispatcher` | Builds taps, drags, swipes, and scrolls as an `Injection` (gesture + stroke start points) and sends them via `dispatchGesture()`. |
+| `PassthroughGate` | **Pure** bookkeeping for the legacy overlay's click-through window (unit tested). |
+| `SwallowedGestureTracker` | **Pure** detection of gestures the legacy overlay swallowed, and the resend decision (unit tested). |
 | `OpenMouseSettings` | Typed, range-clamped wrapper over SharedPreferences. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 | `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
@@ -190,7 +192,8 @@ Navigation actions use `performGlobalAction()` and need no passthrough, since th
 do not inject touches into our window. Everything that injects touches (tap,
 double-tap, long-press, drag, swipe, scroll) goes through `runGesture`, which
 dispatches directly on the modern path and does the legacy passthrough dance on
-API 24-33.
+API 24-33, including resending a gesture the overlay swallowed (see "Legacy
+path" above).
 
 The strip is laid out by the pure `MenuGeometry`: a grid whose toggle is
 anchored at its collapsed center (so it does not jump when the grid expands)
@@ -241,12 +244,17 @@ into classes with **no Android imports**, which run as plain JVM tests:
 - `MenuGeometry` -- layout and hit-testing on a plain `Bounds` rectangle (not
   `android.graphics.RectF`, which is not available in JVM tests). `GestureMenu`
   keeps the `Context`, `Paint`, and `Canvas` work.
+- `PassthroughGate` -- when the legacy overlay goes click-through and when it
+  comes back, including the watchdog deadline.
+- `SwallowedGestureTracker` -- matching touches the legacy overlay rejected to
+  the strokes they came from, and whether resending is safe. Times and
+  positions are parameters, so every race above can be replayed exactly.
 
 The pattern to follow when adding behavior: put the logic in a pure class, test
 it there, and keep the Android wrapper a straight pass-through. Tests live in
 `app/src/test/` and run with `./gradlew test`.
 
-Both pure classes are also fuzzed (Jazzer, under `app/src/test/.../fuzz/`),
+Every pure class is also fuzzed (Jazzer, under `app/src/test/.../fuzz/`),
 the same arrangement PowerToys uses for its Dwell Click engine: the fuzzer
 decodes its bytes into event sequences with adversarial coordinates, timestamps
 and settings, and invariants are asserted after every poll. That is why the pure
