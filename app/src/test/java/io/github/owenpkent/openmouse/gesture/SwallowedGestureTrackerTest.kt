@@ -279,6 +279,43 @@ class SwallowedGestureTrackerTest {
         }
     }
 
+    @Nested
+    inner class FirstAttemptWait {
+
+        @Test
+        fun aFastDeviceKeepsTheHistoricalWaitForASingleStroke() {
+            val t = SwallowedGestureTracker()
+            assertEquals(SwallowedGestureTracker.FIRST_WAIT_MS, t.firstAttemptDelayMs(1))
+            assertEquals(SwallowedGestureTracker.FIRST_WAIT_MS, t.firstAttemptDelayMs(0))
+        }
+
+        @Test
+        fun aMultiStrokeGestureWaitsLongerSoItIsNotSplit() {
+            val t = SwallowedGestureTracker()
+            assertEquals(SwallowedGestureTracker.MULTI_STROKE_FIRST_WAIT_MS, t.firstAttemptDelayMs(2))
+        }
+
+        @Test
+        fun aSwallowTeachesThatTheDeviceIsSlow() {
+            val t = SwallowedGestureTracker()
+            val id = t.dispatched(t.requested(), 100L, tap())
+            assertFalse(t.overlayTouched(110L, 600f, 960f), "a finger elsewhere teaches nothing")
+            assertEquals(SwallowedGestureTracker.FIRST_WAIT_MS, t.firstAttemptDelayMs(1))
+
+            t.overlayTouched(110L, 270f, 960f)
+            assertEquals(SwallowedGestureTracker.SLOW_DEVICE_FIRST_WAIT_MS, t.firstAttemptDelayMs(1))
+            assertEquals(SwallowedGestureTracker.MULTI_STROKE_FIRST_WAIT_MS, t.firstAttemptDelayMs(2))
+
+            t.settle(id, attempt = 0, nowMs = 160L)
+            t.reset()
+            assertEquals(
+                SwallowedGestureTracker.SLOW_DEVICE_FIRST_WAIT_MS,
+                t.firstAttemptDelayMs(1),
+                "reset forgets gestures, not what was learned about the device",
+            )
+        }
+    }
+
     @Test
     fun retryWaitsStartAtTheOldDelayGrowAndRunOut() {
         assertEquals(24L, SwallowedGestureTracker.delayBeforeAttemptMs(0))

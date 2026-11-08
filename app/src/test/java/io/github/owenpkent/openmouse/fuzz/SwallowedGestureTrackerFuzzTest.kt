@@ -22,7 +22,9 @@ import kotlin.math.abs
  * - a retry is only ever allowed to go out for the newest request, inside that
  *   window;
  * - one DOWN claims at most one stroke; an id is answered once;
- * - outstanding matches the model and the memory never exceeds the cap.
+ * - outstanding matches the model and the memory never exceeds the cap;
+ * - the first wait rises for good once any stroke has been swallowed, and a
+ *   multi-stroke gesture always waits at least the multi-stroke minimum.
  *
  * Without `JAZZER_FUZZ=1` this only replays the seed corpus as a JUnit test.
  */
@@ -42,6 +44,7 @@ class SwallowedGestureTrackerFuzzTest {
         val issued = mutableListOf<Int>()
         var latest = 0
         var firstSettle: Long? = null
+        var slowDevice = false
 
         fun near(a: Float, b: Float) = abs(a - b) <= tolerance
         fun inWindow(now: Long): Boolean {
@@ -95,6 +98,7 @@ class SwallowedGestureTrackerFuzzTest {
                         if (near(e.starts[i], x) && near(e.starts[i + 1], y)) {
                             e.claimed++
                             expected = true
+                            slowDevice = true
                             break
                         }
                     }
@@ -144,6 +148,9 @@ class SwallowedGestureTrackerFuzzTest {
             }
 
             assertEquals(model.values.count { it.settledAtMs == null }, tracker.outstanding, "outstanding count")
+            val single = if (slowDevice) SwallowedGestureTracker.SLOW_DEVICE_FIRST_WAIT_MS else SwallowedGestureTracker.FIRST_WAIT_MS
+            assertEquals(single, tracker.firstAttemptDelayMs(1), "single-stroke first wait")
+            assertEquals(maxOf(single, SwallowedGestureTracker.MULTI_STROKE_FIRST_WAIT_MS), tracker.firstAttemptDelayMs(2))
             assertTrue(model.size <= SwallowedGestureTracker.MAX_REMEMBERED, "cap exceeded")
         }
     }

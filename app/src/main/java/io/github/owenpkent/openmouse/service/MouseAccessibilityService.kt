@@ -431,7 +431,11 @@ class MouseAccessibilityService : AccessibilityService() {
 
     /** One legacy attempt at [injection]: passthrough, wait, inject, settle, maybe retry. */
     private fun sendThroughOverlay(dispatcher: GestureDispatcher, injection: Injection, request: Int, attempt: Int) {
-        val waitMs = SwallowedGestureTracker.delayBeforeAttemptMs(attempt) ?: return
+        val waitMs = if (attempt == 0) {
+            swallowed.firstAttemptDelayMs(injection.strokeStarts.size / 2)
+        } else {
+            SwallowedGestureTracker.delayBeforeAttemptMs(attempt) ?: return
+        }
         beginPassthrough()
         handler.postDelayed({
             val now = SystemClock.uptimeMillis()

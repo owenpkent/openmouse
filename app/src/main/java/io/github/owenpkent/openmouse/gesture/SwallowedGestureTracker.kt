@@ -34,6 +34,12 @@ import kotlin.math.abs
  *   notices nothing happened and clicks again, which would otherwise reach the
  *   app on its own and be followed by the retry.
  *
+ * Because a partly swallowed gesture is never repaired, the first attempt is
+ * made less likely to be split: a gesture whose strokes are spread out in time
+ * (a double tap) waits longer before going out, and once any swallow has been
+ * seen the device is known to be slow and every first attempt waits longer
+ * from then on ([firstAttemptDelayMs]).
+ *
  * Times are `uptimeMillis`, the clock MotionEvent.eventTime uses. Defined for
  * any input: unknown or repeated ids are ignored, time running backwards is
  * never inside the retry window, and the number of gestures remembered is
@@ -58,6 +64,11 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
 
     // When the newest request's first attempt settled, or null before then.
     private var latestFirstSettleMs: Long? = null
+
+    // Raised for good once a swallow is seen: this device applies the
+    // click-through change slowly. Survives reset(), which forgets gestures,
+    // not what was learned about the device.
+    private var learnedFirstWaitMs = FIRST_WAIT_MS
 
     /** Gestures dispatched and not yet [settle]d. */
     val outstanding: Int get() = entries.values.count { it.settledAtMs == null }
@@ -106,6 +117,7 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
             val i = e.swallowedStrokes * 2
             if (near(e.starts[i], x) && near(e.starts[i + 1], y)) {
                 e.swallowedStrokes++
+                learnedFirstWaitMs = SLOW_DEVICE_FIRST_WAIT_MS
                 return true
             }
         }
@@ -131,6 +143,14 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
             attempt >= 0 && attempt < MAX_ATTEMPTS - 1 &&
             inRetryWindow(nowMs)
     }
+
+    /**
+     * How long to wait, after making the overlay click-through, before the
+     * first attempt at a gesture of [strokes] strokes. Retries use
+     * [delayBeforeAttemptMs].
+     */
+    fun firstAttemptDelayMs(strokes: Int): Long =
+        if (strokes > 1) maxOf(learnedFirstWaitMs, MULTI_STROKE_FIRST_WAIT_MS) else learnedFirstWaitMs
 
     /** Forget everything outstanding and settled (watchdog expiry or teardown). */
     fun reset() = entries.clear()
@@ -178,10 +198,27 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
          */
         const val MAX_RETRY_LAG_MS = 400L
 
-        // The first wait is the historical one, a frame and a half, so a fast
-        // device pays no extra latency. A retry waits longer; by then the
-        // click-through request has usually been in place for a while.
-        private val DELAYS_MS = longArrayOf(24L, 100L, 200L)
+        /**
+         * The first wait for a single-stroke gesture on a device not yet seen
+         * to be slow: the historical frame and a half, so a fast device pays
+         * no extra latency.
+         */
+        const val FIRST_WAIT_MS = 24L
+
+        /** The first wait once a swallow has been seen on this device. */
+        const val SLOW_DEVICE_FIRST_WAIT_MS = 100L
+
+        /**
+         * The first wait for a gesture with several strokes. If the change
+         * landed between its strokes, the gesture would be split (part on the
+         * overlay, part in the app) and could not be safely resent.
+         */
+        const val MULTI_STROKE_FIRST_WAIT_MS = 200L
+
+        // Index 0 is the default first wait (see firstAttemptDelayMs); a retry
+        // waits longer, and by then the click-through request has usually been
+        // in place for a while.
+        private val DELAYS_MS = longArrayOf(FIRST_WAIT_MS, 100L, 200L)
 
         /** Attempts made at most, the first included. */
         val MAX_ATTEMPTS: Int get() = DELAYS_MS.size

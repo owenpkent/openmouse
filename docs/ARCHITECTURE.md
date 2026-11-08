@@ -89,8 +89,11 @@ edges, each guarded:
    The governing rule is **never repeat what reached the app**: a double tap
    that half got through, an action a newer one superseded, or a retry so late
    the user may have clicked again themselves (that click reaches the app
-   through the click-through overlay) is dropped rather than sent. A fast
-   device keeps the original 24 ms. Ending a passthrough restores the idle
+   through the click-through overlay) is dropped rather than sent. Since a
+   split gesture is never repaired, a multi-stroke gesture (double tap) waits
+   200 ms before its first attempt, and once any swallow is seen the device is
+   known to be slow and every first attempt waits 100 ms. A fast device with
+   single strokes keeps the original 24 ms. Ending a passthrough restores the idle
    watchdog's choice (click-through while capture is suspended), and the idle
    sample makes the overlay touchable again as soon as the mouse is back.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle

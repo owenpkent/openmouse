@@ -41,8 +41,10 @@ tagged release.
   the tap arrived, the overlay took the tap itself. The overlay now notices a
   gesture it swallowed and sends it again after a longer wait (at most twice,
   within 400 ms). Only a gesture that wholly missed the app, and is still the
-  latest action, is resent, so nothing that reached the app is repeated. Found
-  by the new UI tests on an API 30 emulator.
+  latest action, is resent, so nothing that reached the app is repeated. A
+  double tap waits a little longer before going out so it is not split in two,
+  and a device seen to be slow waits longer for every gesture. Found by the new
+  UI tests on an API 30 emulator.
 - Android 11-13: the cursor overlay stopped short of the navigation bar, so the
   cursor could not reach it. The overlay now covers the whole display, as it
   already did on Android 14+.
