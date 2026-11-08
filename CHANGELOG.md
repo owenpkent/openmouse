@@ -43,6 +43,9 @@ tagged release.
   times). Only a gesture that wholly missed the app, and is still the latest
   action, is resent, so nothing that reached the app is ever repeated. Found by
   the new UI tests on an API 30 emulator.
+- Android 11-13: the cursor overlay stopped short of the navigation bar, so the
+  cursor could not reach it. The overlay now covers the whole display, as it
+  already did on Android 14+.
 - Android 7-13: after a gesture, the overlay could turn touchable while
   capture was suspended for lack of mouse input (for example a resting pointer
   repeating a scroll), blocking the touchscreen until the next watchdog pass.

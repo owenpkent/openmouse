@@ -153,6 +153,11 @@ class MouseAccessibilityService : AccessibilityService() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                // From Android 11 a window is fitted inside the system bars by
+                // default, and the legacy layout flags above do not undo that:
+                // on API 30-33 the overlay stopped above the navigation bar,
+                // where the cursor could not reach. Fit inside nothing.
+                fitInsetsTypes = 0
             }
         }
         layoutParams = params
