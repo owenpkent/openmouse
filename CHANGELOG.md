@@ -35,6 +35,13 @@ tagged release.
 
 ### Fixed
 
+- Android 7-13: a dwell click or button click could silently do nothing on a
+  slow device. The cursor overlay is made click-through before each injected
+  tap, but the system applies that asynchronously; if it had not by the time
+  the tap arrived, the overlay took the tap itself. The overlay now notices a
+  tap it swallowed and the gesture is retried with a longer wait (up to three
+  times), so it lands without ever being repeated. Found by the new UI tests on
+  an API 30 emulator.
 - Menu entries no longer re-fire while the pointer stays on them. A tremor
   inside a cell used to restart the countdown and could trigger Back or the
   menu toggle every dwell period; the cell is now the tolerance, and an entry

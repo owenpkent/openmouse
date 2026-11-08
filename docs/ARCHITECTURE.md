@@ -72,6 +72,17 @@ edges, each guarded:
    outstanding gesture and later gestures never push it out, so a repeating
    scroll (one notch per dwell period) cannot keep postponing recovery after a
    lost callback.
+
+   The window manager applies the click-through change asynchronously, so a
+   fixed wait before injecting is a race: on a slow device (the CI emulator
+   took over 75 ms) the overlay is still touchable when the gesture arrives,
+   takes it, and the tap is lost. So `CursorView` also reports any touchscreen
+   DOWN it rejects, and the pure `SwallowedGestureTracker` attributes it: during
+   a passthrough the overlay only goes touchable to click-through, so a DOWN
+   on it at or after a gesture's dispatch means that gesture was swallowed.
+   The service then ends that passthrough and runs the gesture again with a
+   longer wait (24, then 100, 250, 500 ms). A gesture that reached the app is
+   never repeated, and a fast device keeps the original 24 ms.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
    again, then samples periodically to detect a returning mouse and re-arm. So
