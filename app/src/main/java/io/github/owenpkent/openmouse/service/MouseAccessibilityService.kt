@@ -304,6 +304,9 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     private fun onMenuAction(menu: GestureMenu, action: GestureAction) {
+        // A menu choice is a new request: a gesture still waiting to be resent
+        // must not land on whatever screen the choice leads to.
+        swallowed.requested()
         when (action) {
             GestureAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             GestureAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
@@ -413,35 +416,38 @@ class MouseAccessibilityService : AccessibilityService() {
      * it. [swallowed] decides when that happened to a whole gesture (never to
      * one that partly reached the app) and the gesture runs again with a longer
      * wait first, as long as it is still the newest thing the user asked for.
-     * The old passthrough ends before the retry begins, so each attempt gets its
-     * own watchdog deadline.
+     * The old passthrough ends before the retry begins, so a retry gets a fresh
+     * watchdog deadline unless other gestures are still in flight (then it
+     * shares theirs, and a watchdog expiry forgets it rather than resend late).
      */
-    private fun runGesture(
-        injection: Injection,
-        request: Int = swallowed.requested(),
-        attempt: Int = 0,
-    ) {
+    private fun runGesture(injection: Injection) {
         val dispatcher = gestureDispatcher ?: return
         if (modernInput) {
             dispatcher.dispatch(injection) { }
             return
         }
+        sendThroughOverlay(dispatcher, injection, swallowed.requested(), attempt = 0)
+    }
+
+    /** One legacy attempt at [injection]: passthrough, wait, inject, settle, maybe retry. */
+    private fun sendThroughOverlay(dispatcher: GestureDispatcher, injection: Injection, request: Int, attempt: Int) {
         val waitMs = SwallowedGestureTracker.delayBeforeAttemptMs(attempt) ?: return
         beginPassthrough()
         handler.postDelayed({
-            if (!swallowed.shouldDispatch(request, attempt)) {
-                endPassthrough() // superseded by a newer action
+            val now = SystemClock.uptimeMillis()
+            if (!swallowed.shouldDispatch(request, attempt, now)) {
+                endPassthrough() // superseded by a newer action, or too late to be safe
                 return@postDelayed
             }
-            val id = swallowed.dispatched(request, SystemClock.uptimeMillis(), injection.strokeStarts)
+            val id = swallowed.dispatched(request, now, injection.strokeStarts)
             dispatcher.dispatch(injection) {
                 // The overlay's input and this callback are not ordered; give
                 // a swallowed DOWN time to arrive before deciding.
                 handler.postDelayed({
-                    val retry = swallowed.settle(id, attempt)
+                    val retry = swallowed.settle(id, attempt, SystemClock.uptimeMillis())
                     endPassthrough()
                     // Never retry into a torn-down overlay: the service is going away.
-                    if (retry && cursorView != null) runGesture(injection, request, attempt + 1)
+                    if (retry && cursorView != null) sendThroughOverlay(dispatcher, injection, request, attempt + 1)
                 }, SwallowedGestureTracker.SETTLE_MS)
             }
         }, waitMs)
@@ -496,6 +502,9 @@ class MouseAccessibilityService : AccessibilityService() {
                     handler.postDelayed({
                         if (lastPointerMs >= sampleStart) {
                             captureSuspended = false // mouse came back; stay active
+                            // A gesture that ended meanwhile restored the
+                            // suspended (click-through) state; capture again.
+                            if (passthrough.inFlight == 0) setOverlayTouchable(true)
                         } else if (captureSuspended) {
                             setOverlayTouchable(false) // still gone; suspend again
                         }

@@ -80,14 +80,19 @@ edges, each guarded:
    DOWN it rejects, and the pure `SwallowedGestureTracker` matches it, first in
    first out, to the oldest outstanding stroke that starts at that point and
    was dispatched no later (each `Injection` carries its stroke start points).
-   A short settle after each completion lets a late DOWN arrive. The gesture
-   runs again, after a longer wait (24, then 100, 250, 500 ms), only if every
-   one of its strokes was swallowed and it is still the newest action the user
-   asked for. The governing rule is **never repeat what reached the app**: a
-   double tap that half got through, or an old action a newer one has
-   superseded, is dropped rather than sent again. A fast device keeps the
-   original 24 ms. Ending a passthrough restores the idle watchdog's choice
-   (click-through while capture is suspended), never forces touchable.
+   A short settle after each completion lets a late DOWN arrive, and settled
+   gestures stay on record for a second so a late DOWN is absorbed by its own
+   gesture, never credited to a newer one. The gesture runs again, after a
+   longer wait (24, then 100, 200 ms), only if every one of its strokes was
+   swallowed, it is still the newest request (every gesture and every menu
+   choice is one), and it is within 400 ms of the first attempt completing.
+   The governing rule is **never repeat what reached the app**: a double tap
+   that half got through, an action a newer one superseded, or a retry so late
+   the user may have clicked again themselves (that click reaches the app
+   through the click-through overlay) is dropped rather than sent. A fast
+   device keeps the original 24 ms. Ending a passthrough restores the idle
+   watchdog's choice (click-through while capture is suspended), and the idle
+   sample makes the overlay touchable again as soon as the mouse is back.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
    again, then samples periodically to detect a returning mouse and re-arm. So
