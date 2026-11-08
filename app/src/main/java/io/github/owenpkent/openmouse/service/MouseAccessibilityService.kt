@@ -404,8 +404,13 @@ class MouseAccessibilityService : AccessibilityService() {
         beginPassthrough()
         // Give WindowManager a frame to register the window as non-touchable
         // before the gesture is injected, otherwise the overlay can swallow it.
+        android.util.Log.w("OMDIAG", "passthrough begin t=${SystemClock.uptimeMillis()}")
         handler.postDelayed({
-            dispatch { endPassthrough() }
+            android.util.Log.w("OMDIAG", "dispatch gesture t=${SystemClock.uptimeMillis()}")
+            dispatch {
+                android.util.Log.w("OMDIAG", "gesture finished t=${SystemClock.uptimeMillis()}")
+                endPassthrough()
+            }
         }, TAP_PASSTHROUGH_DELAY_MS)
     }
 

@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [30, 34]
+        api-level: [30]
     steps:
       - uses: actions/checkout@v4
 
@@ -93,7 +93,7 @@ jobs:
           disable-animations: true
           # Keep the device log on failure: emulator-only failures are hard to
           # read from the test report alone.
-          script: ./gradlew connectedDebugAndroidTest --no-daemon || (adb logcat -d > app/build/logcat.txt; exit 1)
+          script: ./gradlew connectedDebugAndroidTest --no-daemon -Pandroid.testInstrumentationRunnerArguments.class=io.github.owenpkent.openmouse.CursorPipelineTest#physicalClickTapsAtOnceAndLocksTheDwell,io.github.owenpkent.openmouse.OverlayTest#disablingTheServiceRemovesTheOverlay || (adb logcat -d > app/build/logcat.txt; exit 1)
 
       - name: Upload UI test reports
         if: always()

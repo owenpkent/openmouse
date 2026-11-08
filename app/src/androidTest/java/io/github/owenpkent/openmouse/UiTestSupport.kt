@@ -294,6 +294,8 @@ fun MouseAccessibilityService.centerOf(action: GestureAction): PointF? {
 fun overlayWindowDump(): String? {
     val dump = Device.shell("dumpsys window windows")
     val blocks = dump.split(Regex("(?m)^\\s*Window #\\d+ "))
+    blocks.filter { "ACCESSIBILITY_OVERLAY" in it }
+        .forEach { block -> block.lines().take(12).forEach { android.util.Log.w("OMDIAG", "dump: $it") } }
     return blocks.firstOrNull {
         it.contains("io.github.owenpkent.openmouse}") && it.contains("ACCESSIBILITY_OVERLAY")
     }

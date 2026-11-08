@@ -1,6 +1,7 @@
 package io.github.owenpkent.openmouse.cursor
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -223,6 +224,7 @@ class CursorView(context: Context) : View(context) {
         // the cross-hair or fire a click. A mouse with a button held delivers
         // touch (not hover) events, so we still track those.
         if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            Log.w("OMDIAG", "overlay got non-mouse touch action=${event.actionMasked} src=0x${Integer.toHexString(event.source)} at ${event.rawX},${event.rawY} t=${event.eventTime}")
             return false
         }
         when (event.actionMasked) {
