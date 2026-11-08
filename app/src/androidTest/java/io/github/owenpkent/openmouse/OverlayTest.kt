@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import android.os.SystemClock
 import android.view.InputDevice
+import android.view.WindowManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import io.github.owenpkent.openmouse.menu.GestureAction
@@ -46,25 +47,38 @@ class OverlayTest {
 
     @Test
     fun overlaySpansTheWholeDisplayIncludingTheCutout() {
-        val window = waitFor("the overlay window in dumpsys") { overlayWindowDump() }
-        assertTrue("overlay is not an accessibility overlay:\n$window", "ty=ACCESSIBILITY_OVERLAY" in window)
-        assertTrue("overlay does not fill the display:\n$window", "fillxfill" in window)
-        assertTrue("overlay is focusable and would steal keys:\n$window", "NOT_FOCUSABLE" in window)
+        // Read in-process from the attached view: the same on every release,
+        // unlike dumpsys, whose window description changes between them.
+        val params = waitFor("the overlay window") { overlayParams() }
+        assertEquals("overlay type", WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, params.type)
+        assertEquals(WindowManager.LayoutParams.MATCH_PARENT, params.width)
+        assertEquals(WindowManager.LayoutParams.MATCH_PARENT, params.height)
+        assertTrue("overlay is focusable and would steal keys", params.hasFlag(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // Without this every injected tap lands at a fixed offset from the
             // cross-hair on a display with a cutout.
-            assertTrue("cutout mode is not ALWAYS:\n$window", "layoutInDisplayCutoutMode=always" in window)
+            assertEquals(
+                "cutout mode is not ALWAYS",
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS,
+                params.layoutInDisplayCutoutMode,
+            )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            assertTrue("API 34+ overlay must never be touchable:\n$window", "NOT_TOUCHABLE" in window)
+            assertTrue("API 34+ overlay must never be touchable", params.hasFlag(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE))
         }
 
-        // The laid-out frame, not only the requested params: its origin must be
-        // the screen origin and it must cover the display, or drawing and
-        // dispatchGesture disagree. Newer releases print `frame=`, older `mFrame=`.
+        // Where the window manager actually put it, not only what was asked
+        // for: the origin must be the screen origin and it must cover the
+        // display, or drawing and dispatchGesture disagree.
         val size = Device.displaySize()
-        val frame = FRAME.find(window)?.groupValues?.drop(1)?.map { it.toInt() }
-            ?: throw AssertionError("no frame in the overlay dump:\n$window")
+        val frame = waitFor("the overlay to be laid out") {
+            Device.onMain {
+                val view = OpenMouseService.current?.overlayView ?: return@onMain null
+                if (view.width == 0) return@onMain null
+                val at = IntArray(2).also { view.getLocationOnScreen(it) }
+                listOf(at[0], at[1], at[0] + view.width, at[1] + view.height)
+            }
+        }
         assertEquals("overlay frame [l, t, r, b]", listOf(0, 0, size.width, size.height), frame)
     }
 
@@ -127,13 +141,13 @@ class OverlayTest {
 
     @Test
     fun disablingTheServiceRemovesTheOverlay() {
-        waitFor("the overlay window in dumpsys") { overlayWindowDump() }
+        val view = waitFor("the overlay to attach") {
+            Device.onMain { OpenMouseService.current?.overlayView?.takeIf { it.isAttachedToWindow } }
+        }
         OpenMouseService.disable()
-        waitUntil("the overlay window to go away") { overlayWindowDump() == null }
+        waitUntil("the overlay window to go away") { Device.onMain { !view.isAttachedToWindow } }
         assertFalse(OpenMouseService.isEnabledInSettings())
     }
 
-    private companion object {
-        val FRAME = Regex("""(?:^|\s)m?[Ff]rame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]""")
-    }
+    private fun WindowManager.LayoutParams.hasFlag(flag: Int) = flags and flag != 0
 }

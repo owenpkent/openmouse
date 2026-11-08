@@ -6,6 +6,7 @@ import android.graphics.PointF
 import android.os.Build
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.WindowManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import io.github.owenpkent.openmouse.menu.GestureAction
@@ -108,7 +109,7 @@ class CursorPipelineTest {
         // gesture's passthrough ends, or the mouse would stop reaching it.
         waitUntil("the overlay to be touchable again", TIMEOUT_MS) {
             mouse.moveTo(app.x + 1f, app.y)
-            overlayWindowDump()?.let { "NOT_TOUCHABLE" !in it } == true
+            overlayParams()?.let { it.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE == 0 } == true
         }
     }
 

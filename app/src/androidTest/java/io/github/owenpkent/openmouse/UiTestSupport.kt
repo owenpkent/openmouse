@@ -290,13 +290,14 @@ fun MouseAccessibilityService.centerOf(action: GestureAction): PointF? {
     }
 }
 
-/** The dumpsys block for OpenMouse's overlay window, or null if none is attached. */
-fun overlayWindowDump(): String? {
-    val dump = Device.shell("dumpsys window windows")
-    val blocks = dump.split(Regex("(?m)^\\s*Window #\\d+ "))
-    return blocks.firstOrNull {
-        it.contains("io.github.owenpkent.openmouse}") && it.contains("ACCESSIBILITY_OVERLAY")
-    }
+/**
+ * The overlay window's current params as the window manager holds them (a
+ * view's layoutParams after addView), or null if no overlay is attached. Read
+ * in-process because dumpsys describes windows differently on every release.
+ */
+fun overlayParams(): WindowManager.LayoutParams? = Device.onMain {
+    val view = OpenMouseService.current?.overlayView
+    if (view?.isAttachedToWindow == true) view.layoutParams as? WindowManager.LayoutParams else null
 }
 
 /** Touch DOWNs the recorder has seen. */
