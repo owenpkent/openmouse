@@ -77,12 +77,17 @@ edges, each guarded:
    fixed wait before injecting is a race: on a slow device (the CI emulator
    took over 75 ms) the overlay is still touchable when the gesture arrives,
    takes it, and the tap is lost. So `CursorView` also reports any touchscreen
-   DOWN it rejects, and the pure `SwallowedGestureTracker` attributes it: during
-   a passthrough the overlay only goes touchable to click-through, so a DOWN
-   on it at or after a gesture's dispatch means that gesture was swallowed.
-   The service then ends that passthrough and runs the gesture again with a
-   longer wait (24, then 100, 250, 500 ms). A gesture that reached the app is
-   never repeated, and a fast device keeps the original 24 ms.
+   DOWN it rejects, and the pure `SwallowedGestureTracker` matches it, first in
+   first out, to the oldest outstanding stroke that starts at that point and
+   was dispatched no later (each `Injection` carries its stroke start points).
+   A short settle after each completion lets a late DOWN arrive. The gesture
+   runs again, after a longer wait (24, then 100, 250, 500 ms), only if every
+   one of its strokes was swallowed and it is still the newest action the user
+   asked for. The governing rule is **never repeat what reached the app**: a
+   double tap that half got through, or an old action a newer one has
+   superseded, is dropped rather than sent again. A fast device keeps the
+   original 24 ms. Ending a passthrough restores the idle watchdog's choice
+   (click-through while capture is suspended), never forces touchable.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
    again, then samples periodically to detect a returning mouse and re-arm. So

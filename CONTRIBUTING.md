@@ -117,14 +117,18 @@ Most new gestures follow the same path:
 2. Add a label string in `res/values/strings.xml` and a row in `GestureMenu`'s
    `items` list. The grid resizes itself via `MenuGeometry` (two columns,
    more on a short screen).
-3. Add the injection method to `GestureDispatcher` (build a `GestureDescription`
-   with the right strokes). Use existing methods as a template.
+3. Add the injection method to `GestureDispatcher`: it builds and returns an
+   `Injection` (the `GestureDescription` plus each stroke's start point, in
+   stroke order). Use existing methods as a template. The start points must be
+   exact: on API 24-33 they are how a gesture the overlay swallowed is told apart
+   from one that reached the app.
 4. Handle the new mode in `MouseAccessibilityService.performMode()`. Decide
    whether it is one-shot (revert to `TAP`), sticky, or repeating (add it to
    `GestureAction.isRepeating` so a dwell re-arms in place). Two-point gestures use the
    `pendingX/pendingY` start-point flow.
-5. If it injects touches, dispatch through `runGesture` so the overlay passes the
-   gesture through to the app below.
+5. If it injects touches, send it with `runGesture(dispatcher.yourGesture(...))`
+   so the overlay passes the gesture through to the app below (and, on API
+   24-33, retries it if the overlay swallowed it).
 6. If you extracted any pure logic, add a unit test under `app/src/test/`. If
    it consumes pointer positions, timestamps or settings, extend the matching
    fuzz target under `app/src/test/.../fuzz/` (or add one) so the nightly

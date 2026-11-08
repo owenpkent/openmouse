@@ -39,9 +39,13 @@ tagged release.
   slow device. The cursor overlay is made click-through before each injected
   tap, but the system applies that asynchronously; if it had not by the time
   the tap arrived, the overlay took the tap itself. The overlay now notices a
-  tap it swallowed and the gesture is retried with a longer wait (up to three
-  times), so it lands without ever being repeated. Found by the new UI tests on
-  an API 30 emulator.
+  gesture it swallowed and it is sent again with a longer wait (up to three
+  times). Only a gesture that wholly missed the app, and is still the latest
+  action, is resent, so nothing that reached the app is ever repeated. Found by
+  the new UI tests on an API 30 emulator.
+- Android 7-13: after a gesture, the overlay could turn touchable while
+  capture was suspended for lack of mouse input (for example a resting pointer
+  repeating a scroll), blocking the touchscreen until the next watchdog pass.
 - Menu entries no longer re-fire while the pointer stays on them. A tremor
   inside a cell used to restart the countdown and could trigger Back or the
   menu toggle every dwell period; the cell is now the tolerance, and an entry

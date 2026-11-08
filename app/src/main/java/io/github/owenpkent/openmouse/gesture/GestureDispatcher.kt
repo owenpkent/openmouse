@@ -5,53 +5,57 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 
 /**
+ * A gesture ready to inject, with where each of its strokes starts (x, y pairs
+ * in stroke order). The start points are what lets the legacy overlay match a
+ * touch it swallowed to the stroke it came from (see SwallowedGestureTracker).
+ */
+class Injection(val gesture: GestureDescription, val strokeStarts: FloatArray)
+
+/**
  * Turns cursor actions into real input by way of
  * [AccessibilityService.dispatchGesture] -- the only stock-Android API that can
  * inject taps and swipes into other apps without root. It works only because
  * the service declares canPerformGestures="true" in its config.
  *
- * Every method takes an [onFinished] callback that runs once the gesture
- * completes, is cancelled, or is refused by the platform. Callers rely on it to
- * undo the overlay passthrough set up around each gesture (see
- * MouseAccessibilityService.runGesture).
+ * Each action method only builds an [Injection]; [dispatch] sends it. The
+ * service sends every one through MouseAccessibilityService.runGesture, which
+ * sets up the overlay passthrough around it and may send it again if the
+ * legacy overlay swallowed it.
  */
 class GestureDispatcher(private val service: AccessibilityService) {
 
-    /** Inject a single tap at screen coordinates ([x], [y]). */
-    fun tap(x: Float, y: Float, onFinished: () -> Unit = {}) {
-        val stroke = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS)
-        dispatch(GestureDescription.Builder().addStroke(stroke).build(), onFinished)
-    }
+    /** A single tap at screen coordinates ([x], [y]). */
+    fun tap(x: Float, y: Float): Injection =
+        single(pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS), x, y)
 
-    /** Inject two quick taps at ([x], [y]). */
-    fun doubleTap(x: Float, y: Float, onFinished: () -> Unit = {}) {
+    /** Two quick taps at ([x], [y]). */
+    fun doubleTap(x: Float, y: Float): Injection {
         val first = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS, startTime = 0L)
         val second = pathStroke(Path().apply { moveTo(x, y) }, TAP_DURATION_MS, startTime = DOUBLE_TAP_GAP_MS)
-        dispatch(GestureDescription.Builder().addStroke(first).addStroke(second).build(), onFinished)
+        return Injection(
+            GestureDescription.Builder().addStroke(first).addStroke(second).build(),
+            floatArrayOf(x, y, x, y),
+        )
     }
 
-    /** Inject a long press (press-and-hold) at ([x], [y]). */
-    fun longPress(x: Float, y: Float, onFinished: () -> Unit = {}) {
-        val stroke = pathStroke(Path().apply { moveTo(x, y) }, LONG_PRESS_DURATION_MS)
-        dispatch(GestureDescription.Builder().addStroke(stroke).build(), onFinished)
-    }
+    /** A long press (press-and-hold) at ([x], [y]). */
+    fun longPress(x: Float, y: Float): Injection =
+        single(pathStroke(Path().apply { moveTo(x, y) }, LONG_PRESS_DURATION_MS), x, y)
 
     /** Slow drag from ([x1], [y1]) to ([x2], [y2]) -- carries content or a handle. */
-    fun drag(x1: Float, y1: Float, x2: Float, y2: Float, onFinished: () -> Unit = {}) {
-        line(x1, y1, x2, y2, DRAG_DURATION_MS, onFinished)
-    }
+    fun drag(x1: Float, y1: Float, x2: Float, y2: Float): Injection =
+        line(x1, y1, x2, y2, DRAG_DURATION_MS)
 
     /** Fast swipe / fling from ([x1], [y1]) to ([x2], [y2]). */
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, onFinished: () -> Unit = {}) {
-        line(x1, y1, x2, y2, SWIPE_DURATION_MS, onFinished)
-    }
+    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float): Injection =
+        line(x1, y1, x2, y2, SWIPE_DURATION_MS)
 
     /**
      * Scroll the content at ([x], [y]). [revealAbove] true scrolls toward the
      * top of the content (finger drags down); false scrolls toward the bottom.
      * The stroke is clamped to the display so it stays on-screen near the edges.
      */
-    fun scroll(x: Float, y: Float, revealAbove: Boolean, onFinished: () -> Unit = {}) {
+    fun scroll(x: Float, y: Float, revealAbove: Boolean): Injection {
         val dm = service.resources.displayMetrics
         val dist = SCROLL_DISTANCE_DP * dm.density
         val maxY = dm.heightPixels.toFloat()
@@ -69,30 +73,38 @@ class GestureDispatcher(private val service: AccessibilityService) {
         // To reveal content above, the finger drags downward (top -> bottom).
         val fromY = if (revealAbove) top else bottom
         val toY = if (revealAbove) bottom else top
-        line(x, fromY, x, toY, SCROLL_DURATION_MS, onFinished)
+        return line(x, fromY, x, toY, SCROLL_DURATION_MS)
     }
 
-    private fun line(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long, onFinished: () -> Unit) {
-        val path = Path().apply {
-            moveTo(x1, y1)
-            lineTo(x2, y2)
-        }
-        dispatch(GestureDescription.Builder().addStroke(pathStroke(path, duration)).build(), onFinished)
-    }
-
-    private fun pathStroke(path: Path, duration: Long, startTime: Long = 0L) =
-        GestureDescription.StrokeDescription(path, startTime, duration)
-
-    private fun dispatch(gesture: GestureDescription, onFinished: () -> Unit) {
+    /**
+     * Inject [injection]. [onFinished] runs once it completes, is cancelled, or
+     * is refused by the platform; the caller relies on it to undo the overlay
+     * passthrough set up around the gesture.
+     */
+    fun dispatch(injection: Injection, onFinished: () -> Unit) {
         val callback = object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) = onFinished()
             override fun onCancelled(gestureDescription: GestureDescription?) = onFinished()
         }
-        val dispatched = service.dispatchGesture(gesture, callback, null)
+        val dispatched = service.dispatchGesture(injection.gesture, callback, null)
         // dispatchGesture returns false if the gesture could not be queued at
         // all; the callback never fires in that case, so finish here instead.
         if (!dispatched) onFinished()
     }
+
+    private fun line(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long): Injection {
+        val path = Path().apply {
+            moveTo(x1, y1)
+            lineTo(x2, y2)
+        }
+        return single(pathStroke(path, duration), x1, y1)
+    }
+
+    private fun single(stroke: GestureDescription.StrokeDescription, x: Float, y: Float) =
+        Injection(GestureDescription.Builder().addStroke(stroke).build(), floatArrayOf(x, y))
+
+    private fun pathStroke(path: Path, duration: Long, startTime: Long = 0L) =
+        GestureDescription.StrokeDescription(path, startTime, duration)
 
     companion object {
         // A 1 ms stroke registers as a tap, well under the long-press timeout.

@@ -1,78 +1,137 @@
 package io.github.owenpkent.openmouse.gesture
 
+import kotlin.math.abs
+
 /**
  * Pure detection of injected gestures that the legacy (API 24-33) overlay
- * swallowed, with no Android dependencies so it can be unit tested.
+ * swallowed, and the decision to send one again. No Android dependencies, so it
+ * is unit tested and fuzzed.
  *
  * On those releases the overlay is touchable (it captures the mouse), so before
  * each injected gesture the service asks for it to be click-through and waits a
  * moment. The window manager applies that change asynchronously; on a slow
  * device it can still be touchable when the gesture arrives. The overlay then
  * receives the gesture itself, rejects it (it only takes mouse input), and the
- * tap is silently lost.
+ * action is silently lost.
  *
- * Detection rests on one fact: during a passthrough the overlay only goes from
- * touchable to click-through, never back, until the passthrough ends. So if a
- * touchscreen DOWN reaches the overlay at or after the moment a gesture was
- * dispatched (and before that gesture finished), the overlay was still
- * touchable when the gesture was injected: the gesture was swallowed, not
- * delivered. That holds whether the DOWN was the gesture itself or a finger
- * that happened to land in the same window, so a gesture that did reach the
- * app is never reported as swallowed (bar a finger landing in the same
- * instant the window manager flips the flag). The service then runs the
- * gesture again, waiting longer each time ([delayBeforeAttemptMs]).
+ * The overlay reports every touchscreen DOWN it rejects. Each one is matched,
+ * first in first out, to the oldest outstanding stroke that starts at that
+ * point (injected strokes arrive in the order they were dispatched). The rule
+ * the service relies on is **never repeat what reached the app**:
+ *
+ * - a gesture counts as swallowed only if *every* one of its strokes was seen
+ *   on the overlay. A double tap whose second stroke got through has partly
+ *   reached the app, and sending it again would add taps, so it is not retried;
+ * - a DOWN only matches a stroke dispatched at or before it, at the stroke's
+ *   start point, so a finger elsewhere on the screen claims nothing;
+ * - only the newest action the user asked for is retried ([requested]). Once a
+ *   newer one exists, an older retry would cancel or reorder it, so it is
+ *   dropped instead.
  *
  * Times are `uptimeMillis`, the clock MotionEvent.eventTime uses. Defined for
  * any input: unknown or repeated ids are ignored, and the number of gestures
  * remembered is capped so lost completion callbacks cannot grow it without
  * bound (the service also [reset]s it when its passthrough watchdog fires).
  */
-class SwallowedGestureTracker {
+class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
 
-    private class Pending(val dispatchedMs: Long) {
-        var swallowed = false
+    private val tolerancePx = if (tolerancePx >= 0f) tolerancePx else 0f
+
+    private class Pending(val request: Int, val dispatchedMs: Long, val starts: FloatArray) {
+        val strokes: Int get() = starts.size / 2
+        var swallowedStrokes = 0
     }
 
-    // Insertion-ordered, so the oldest entry is the one dropped at the cap.
+    // Insertion-ordered, so iteration is dispatch order and the oldest entry is
+    // the one dropped at the cap.
     private val pending = LinkedHashMap<Int, Pending>()
     private var nextId = 0
+    private var latestRequest = 0
 
-    /** Gestures dispatched and not yet [finished]. */
+    /** Gestures dispatched and not yet [settle]d. */
     val outstanding: Int get() = pending.size
 
-    /** A gesture was handed to the platform at [nowMs]. Returns its id for [finished]. */
-    fun dispatched(nowMs: Long): Int {
+    /**
+     * The user asked for a new action (not a retry of one). Returns its request
+     * number, which every attempt at that action carries.
+     */
+    fun requested(): Int {
+        latestRequest++
+        return latestRequest
+    }
+
+    /**
+     * Whether attempt [attempt] of [request] should still go out: always the
+     * first one; a retry only while no newer action has been asked for.
+     */
+    fun shouldDispatch(request: Int, attempt: Int): Boolean = attempt <= 0 || request == latestRequest
+
+    /**
+     * Attempt of [request] handed to the platform at [nowMs], its strokes
+     * starting at [strokeStarts] (x, y pairs in stroke order; a trailing odd
+     * value is ignored). Returns the id to [settle] it with.
+     */
+    fun dispatched(request: Int, nowMs: Long, strokeStarts: FloatArray): Int {
         val id = nextId++
-        pending.remove(id) // only after the counter wraps, which is billions of gestures away
+        pending.remove(id) // only after the counter wraps, billions of gestures away
         if (pending.size >= MAX_OUTSTANDING) pending.remove(pending.keys.first())
-        pending[id] = Pending(nowMs)
+        pending[id] = Pending(request, nowMs, strokeStarts.copyOf(strokeStarts.size - strokeStarts.size % 2))
         return id
     }
 
     /**
-     * A touchscreen DOWN (not the mouse) reached the overlay, stamped
-     * [eventTimeMs]. Every outstanding gesture dispatched at or before that
-     * time was swallowed.
+     * A touchscreen DOWN (not the mouse) reached the overlay at ([x], [y]),
+     * stamped [eventTimeMs]. Claims the oldest outstanding stroke it can be.
+     * Returns whether it matched one.
      */
-    fun overlayTouched(eventTimeMs: Long) {
+    fun overlayTouched(eventTimeMs: Long, x: Float, y: Float): Boolean {
         for (p in pending.values) {
-            if (eventTimeMs >= p.dispatchedMs) p.swallowed = true
+            if (eventTimeMs < p.dispatchedMs || p.swallowedStrokes >= p.strokes) continue
+            val i = p.swallowedStrokes * 2
+            if (near(p.starts[i], x) && near(p.starts[i + 1], y)) {
+                p.swallowedStrokes++
+                return true
+            }
         }
+        return false
     }
 
     /**
-     * Gesture [id] completed or was cancelled. Returns true if the overlay
-     * swallowed it, so it never reached the app. An unknown id (already
-     * finished, dropped at the cap, or forgotten by [reset]) returns false.
+     * Gesture [id], sent as attempt [attempt], completed or was cancelled and
+     * its touches have had time to arrive. Forgets it and returns whether to
+     * send it again: every stroke was swallowed, it is still the newest action,
+     * and attempts remain. An unknown id returns false.
      */
-    fun finished(id: Int): Boolean = pending.remove(id)?.swallowed ?: false
+    fun settle(id: Int, attempt: Int): Boolean {
+        val p = pending.remove(id) ?: return false
+        val wholeGestureSwallowed = p.strokes > 0 && p.swallowedStrokes == p.strokes
+        return wholeGestureSwallowed &&
+            p.request == latestRequest &&
+            attempt >= 0 && attempt < MAX_ATTEMPTS - 1
+    }
 
     /** Forget every outstanding gesture (watchdog expiry or teardown). */
     fun reset() = pending.clear()
 
+    private fun near(a: Float, b: Float): Boolean = abs(a - b) <= tolerancePx
+
     companion object {
         /** Gestures remembered at once. Healthy operation has one or two. */
         const val MAX_OUTSTANDING = 32
+
+        /**
+         * Injected strokes land where they were aimed; allow for rounding to
+         * the input pipeline's precision and nothing more, so a finger nearby
+         * cannot pass for one.
+         */
+        const val DEFAULT_TOLERANCE_PX = 2f
+
+        /**
+         * How long the service waits after a gesture finishes before settling
+         * it. The overlay's input channel and the completion callback are not
+         * ordered with each other, so a swallowed DOWN can arrive just after.
+         */
+        const val SETTLE_MS = 48L
 
         // The first wait is the historical one, a frame and a half, so a fast
         // device pays no extra latency. Each retry gives the window manager

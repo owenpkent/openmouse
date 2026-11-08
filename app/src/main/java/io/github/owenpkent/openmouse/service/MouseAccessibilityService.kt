@@ -19,6 +19,7 @@ import androidx.annotation.VisibleForTesting
 import io.github.owenpkent.openmouse.click.DwellClicker
 import io.github.owenpkent.openmouse.cursor.CursorView
 import io.github.owenpkent.openmouse.gesture.GestureDispatcher
+import io.github.owenpkent.openmouse.gesture.Injection
 import io.github.owenpkent.openmouse.gesture.PassthroughGate
 import io.github.owenpkent.openmouse.gesture.SwallowedGestureTracker
 import io.github.owenpkent.openmouse.menu.GestureAction
@@ -123,7 +124,7 @@ class MouseAccessibilityService : AccessibilityService() {
         view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         // A touchscreen DOWN on the legacy overlay during a passthrough means an
         // injected gesture landed on the overlay instead of the app.
-        view.onTouchscreenDown = { eventTimeMs -> swallowed.overlayTouched(eventTimeMs) }
+        view.onTouchscreenDown = { t, x, y -> swallowed.overlayTouched(t, x, y) }
         // A resize (rotation) re-lays out the menu with no pointer event, so the
         // entry the dwell machine is anchored on may no longer be under the
         // cursor; re-anchor and lock, exactly as after a menu choice.
@@ -327,25 +328,25 @@ class MouseAccessibilityService : AccessibilityService() {
     private fun performMode(mode: GestureAction, x: Float, y: Float) {
         val dispatcher = gestureDispatcher ?: return
         when (mode) {
-            GestureAction.TAP -> runGesture { done -> dispatcher.tap(x, y, done) }
+            GestureAction.TAP -> runGesture(dispatcher.tap(x, y))
 
             GestureAction.DOUBLE_TAP -> {
-                runGesture { done -> dispatcher.doubleTap(x, y, done) }
+                runGesture(dispatcher.doubleTap(x, y))
                 resetToTap()
             }
 
             GestureAction.LONG_PRESS -> {
-                runGesture { done -> dispatcher.longPress(x, y, done) }
+                runGesture(dispatcher.longPress(x, y))
                 resetToTap()
             }
 
             GestureAction.DRAG, GestureAction.SWIPE -> performTwoPoint(mode, x, y)
 
             GestureAction.SCROLL_UP ->
-                runGesture { done -> dispatcher.scroll(x, y, revealAbove = true, done) }
+                runGesture(dispatcher.scroll(x, y, revealAbove = true))
 
             GestureAction.SCROLL_DOWN ->
-                runGesture { done -> dispatcher.scroll(x, y, revealAbove = false, done) }
+                runGesture(dispatcher.scroll(x, y, revealAbove = false))
 
             else -> Unit // navigation, pause and toggle never reach here
         }
@@ -354,7 +355,7 @@ class MouseAccessibilityService : AccessibilityService() {
     private fun handleScroll(x: Float, y: Float, vscroll: Float) {
         val dispatcher = gestureDispatcher ?: return
         // Wheel-up (vscroll > 0) reveals content above.
-        runGesture { done -> dispatcher.scroll(x, y, revealAbove = vscroll > 0f, done) }
+        runGesture(dispatcher.scroll(x, y, revealAbove = vscroll > 0f))
     }
 
     /**
@@ -373,9 +374,9 @@ class MouseAccessibilityService : AccessibilityService() {
         val dispatcher = gestureDispatcher
         if (dispatcher != null) {
             if (mode == GestureAction.DRAG) {
-                runGesture { done -> dispatcher.drag(startX, startY, x, y, done) }
+                runGesture(dispatcher.drag(startX, startY, x, y))
             } else {
-                runGesture { done -> dispatcher.swipe(startX, startY, x, y, done) }
+                runGesture(dispatcher.swipe(startX, startY, x, y))
             }
         }
         clearPending()
@@ -404,25 +405,39 @@ class MouseAccessibilityService : AccessibilityService() {
      * The window manager applies the click-through change asynchronously, so a
      * slow device can still have the overlay touchable when the gesture
      * arrives; the overlay then takes the gesture itself and the app never sees
-     * it. [swallowed] detects that, and the gesture runs again with a longer
-     * wait first, up to [SwallowedGestureTracker.MAX_ATTEMPTS] times. The old
-     * passthrough ends before the retry begins, so each attempt gets its own
-     * watchdog deadline.
+     * it. [swallowed] decides when that happened to a whole gesture (never to
+     * one that partly reached the app) and the gesture runs again with a longer
+     * wait first, as long as it is still the newest thing the user asked for.
+     * The old passthrough ends before the retry begins, so each attempt gets its
+     * own watchdog deadline.
      */
-    private fun runGesture(attempt: Int = 0, dispatch: (onFinished: () -> Unit) -> Unit) {
+    private fun runGesture(
+        injection: Injection,
+        request: Int = swallowed.requested(),
+        attempt: Int = 0,
+    ) {
+        val dispatcher = gestureDispatcher ?: return
         if (modernInput) {
-            dispatch { }
+            dispatcher.dispatch(injection) { }
             return
         }
         val waitMs = SwallowedGestureTracker.delayBeforeAttemptMs(attempt) ?: return
         beginPassthrough()
         handler.postDelayed({
-            val id = swallowed.dispatched(SystemClock.uptimeMillis())
-            dispatch {
-                val lost = swallowed.finished(id)
-                endPassthrough()
-                // Never retry into a torn-down overlay: the service is going away.
-                if (lost && cursorView != null) runGesture(attempt + 1, dispatch)
+            if (!swallowed.shouldDispatch(request, attempt)) {
+                endPassthrough() // superseded by a newer action
+                return@postDelayed
+            }
+            val id = swallowed.dispatched(request, SystemClock.uptimeMillis(), injection.strokeStarts)
+            dispatcher.dispatch(injection) {
+                // The overlay's input and this callback are not ordered; give
+                // a swallowed DOWN time to arrive before deciding.
+                handler.postDelayed({
+                    val retry = swallowed.settle(id, attempt)
+                    endPassthrough()
+                    // Never retry into a torn-down overlay: the service is going away.
+                    if (retry && cursorView != null) runGesture(injection, request, attempt + 1)
+                }, SwallowedGestureTracker.SETTLE_MS)
             }
         }, waitMs)
     }
@@ -438,20 +453,25 @@ class MouseAccessibilityService : AccessibilityService() {
         setOverlayTouchable(false)
     }
 
+    // Restoring after a passthrough returns the overlay to what the idle
+    // watchdog wants, not unconditionally to touchable: if capture was
+    // suspended (no mouse for a while, e.g. a resting pointer repeating a
+    // scroll), forcing it touchable would lock out the finger until the next
+    // watchdog pass.
     private fun endPassthrough() {
         if (passthrough.end()) {
             handler.removeCallbacks(passthroughWatchdog)
-            setOverlayTouchable(true)
+            setOverlayTouchable(!captureSuspended)
         }
     }
 
-    // Force the overlay touchable again if a gesture callback was dropped, so the
-    // cursor can never get stuck unable to capture the mouse.
+    // Restore the overlay if a gesture callback was dropped, so the cursor can
+    // never get stuck unable to capture the mouse.
     private val passthroughWatchdog = Runnable {
         if (passthrough.expire(SystemClock.uptimeMillis())) {
             // Their completions are presumed lost, so nothing will claim them.
             swallowed.reset()
-            setOverlayTouchable(true)
+            setOverlayTouchable(!captureSuspended)
         }
     }
 

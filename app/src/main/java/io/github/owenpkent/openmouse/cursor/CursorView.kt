@@ -36,12 +36,12 @@ class CursorView(context: Context) : View(context) {
     var onScroll: ((Float, Float, Float) -> Unit)? = null
 
     /**
-     * Called with the event time (uptimeMillis) of a non-mouse DOWN that reached
-     * this overlay. It never moves the cursor; the service uses it to spot an
-     * injected gesture the overlay swallowed (API 24-33 only, where the overlay
-     * is touchable).
+     * Called with the event time (uptimeMillis) and screen position of a
+     * non-mouse DOWN that reached this overlay. It never moves the cursor; the
+     * service uses it to spot an injected gesture the overlay swallowed (API
+     * 24-33 only, where the overlay is touchable).
      */
-    var onTouchscreenDown: ((Long) -> Unit)? = null
+    var onTouchscreenDown: ((Long, Float, Float) -> Unit)? = null
 
     /** The gesture menu to draw and hit-test; set by the service. */
     var gestureMenu: GestureMenu? = null
@@ -233,7 +233,9 @@ class CursorView(context: Context) : View(context) {
         if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             // Still report it: during a passthrough this is how the service
             // learns an injected gesture hit the overlay instead of the app.
-            if (event.actionMasked == MotionEvent.ACTION_DOWN) onTouchscreenDown?.invoke(event.eventTime)
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                onTouchscreenDown?.invoke(event.eventTime, event.rawX, event.rawY)
+            }
             return false
         }
         when (event.actionMasked) {
