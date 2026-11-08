@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug builds only. The instrumented UI tests (app/src/androidTest) need an
+    app window under the cursor that records exactly where each injected touch
+    lands. Activities declared in the androidTest manifest belong to the test
+    APK and cannot be launched in the app's process, so it lives here instead.
+    Not exported: nothing outside this app can start it, and release builds do
+    not contain it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".testing.TouchRecorderActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+
+</manifest>

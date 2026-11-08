@@ -14,6 +14,7 @@ import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import androidx.annotation.VisibleForTesting
 import io.github.owenpkent.openmouse.click.DwellClicker
 import io.github.owenpkent.openmouse.cursor.CursorView
 import io.github.owenpkent.openmouse.gesture.GestureDispatcher
@@ -21,6 +22,7 @@ import io.github.owenpkent.openmouse.gesture.PassthroughGate
 import io.github.owenpkent.openmouse.menu.GestureAction
 import io.github.owenpkent.openmouse.menu.GestureMenu
 import io.github.owenpkent.openmouse.settings.OpenMouseSettings
+import java.lang.ref.WeakReference
 
 /**
  * The OpenMouse engine.
@@ -159,6 +161,7 @@ class MouseAccessibilityService : AccessibilityService() {
         }
 
         applySettings()
+        connected = WeakReference(this)
 
         if (!modernInput) {
             lastPointerMs = SystemClock.uptimeMillis()
@@ -471,6 +474,7 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     private fun removeCursorOverlay() {
+        if (connected?.get() === this) connected = null
         handler.removeCallbacksAndMessages(null)
         settings?.unregisterListener(settingsListener)
         settings = null
@@ -494,6 +498,22 @@ class MouseAccessibilityService : AccessibilityService() {
         windowManager = null
     }
 
+    /** The menu entry under ([x], [y]), as the dwell machine sees it. Main thread. */
+    @VisibleForTesting
+    internal fun menuEntryAt(x: Float, y: Float): GestureAction? = gestureMenu?.hitTest(x, y)
+
+    /** The active tap mode. Main thread. */
+    @VisibleForTesting
+    internal val currentMode: GestureAction? get() = gestureMenu?.currentMode
+
+    /** Whether a two-point gesture (drag/swipe) has its start point and awaits the end. Main thread. */
+    @VisibleForTesting
+    internal val hasPendingPoint: Boolean get() = pendingX != null
+
+    /** Whether dwell clicking on the app is paused. Main thread. */
+    @VisibleForTesting
+    internal val isPaused: Boolean get() = dwellClicker?.isPaused == true
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Not used: OpenMouse drives input, it does not react to UI events.
     }
@@ -513,6 +533,18 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        /**
+         * The service while its overlay is up, for the instrumented UI tests only.
+         * A headless emulator has no mouse and the framework filters shell-injected
+         * input out of [onMotionEvent], so the tests (which run in this process)
+         * feed synthetic mouse events to it directly. Everything downstream of that
+         * call is the real pipeline. Weak, so a test can never keep a dead service.
+         */
+        @VisibleForTesting
+        @Volatile
+        internal var connected: WeakReference<MouseAccessibilityService>? = null
+            private set
+
         private const val TAP_PASSTHROUGH_DELAY_MS = 24L
         private const val MAX_GESTURE_MS = 1500L
         private const val WATCHDOG_INTERVAL_MS = 2500L

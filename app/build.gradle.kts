@@ -61,6 +61,9 @@ android {
     }
 
     testOptions {
+        // Instrumented UI tests: animations off so Espresso and the timing-based
+        // dwell assertions are not racing transitions.
+        animationsDisabled = true
         unitTests.isReturnDefaultValues = true
         unitTests.all { test ->
             // JUnit 5 for the plain tests and for Jazzer's @FuzzTest.
@@ -89,4 +92,10 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.jazzer.junit)
     testRuntimeOnly(libs.junit.platform.launcher)
+
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }

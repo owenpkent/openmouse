@@ -16,6 +16,7 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 
 - Kotlin Android AccessibilityService. AGP 9.0.1 (built-in Kotlin, no separate plugin), Gradle wrapper 9.2.1, JDK 17, min/target/compile SDK 24/36/36, namespace `io.github.owenpkent.openmouse`. Deps via `gradle/libs.versions.toml`.
 - `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`.
+- `app/src/androidTest/` - instrumented UI tests (JUnit 4, Espresso). `CursorPipelineTest` drives the cursor by calling the service's `onMotionEvent` in-process (shell input is filtered) and reads injected touches back from the debug-only `TouchRecorderActivity` (`app/src/debug/`). Keep the service's `@VisibleForTesting` seam (`connected`, `menuEntryAt`, `currentMode`, `hasPendingPoint`, `isPaused`) read-only.
 - `app/src/test/java/.../{click,menu}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
 - `docs/ARCHITECTURE.md` - read first. `platform/` + `Android.bp` - AOSP/LineageOS system-app build (not day-to-day, unvalidated). `fastlane/` - F-Droid/Play metadata.
 
@@ -24,8 +25,8 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 - Build: `./gradlew assembleDebug` (APK at `app/build/outputs/apk/debug/app-debug.apk`).
 - Test: `./gradlew test` (or `./gradlew testDebugUnitTest`). Fuzz locally (ten minutes per target): `JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'`.
 - Pure classes must stay defined for any input (clamp, never throw): the fuzz targets assert that. When adding logic that takes positions, timestamps or settings, extend the matching fuzz target.
-- Lint: `./gradlew lint`. Run `./gradlew test lint` before opening a PR.
-- No device: boot an API 34+ AVD, install, grant the `ACCESS_RESTRICTED_SETTINGS` appop, and enable the service over adb (exact commands in CONTRIBUTING.md). A headless emulator cannot drive a real mouse, so the cursor pipeline is covered by unit tests, not the emulator.
+- Lint: `./gradlew lint`. Run `./gradlew test lint` before opening a PR, plus `./gradlew connectedDebugAndroidTest` when touching the service, overlay, menu, gestures or settings screens.
+- UI tests: boot an AVD (API 34+ for the mouse-driven tests) and run `./gradlew connectedDebugAndroidTest`; the tests enable the service themselves. CI runs them on API 30 and 34. Get `UiAutomation` only with `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES` (use `Device.shell()`), or OpenMouse is unbound mid-test. Manual smoke-test commands are in CONTRIBUTING.md.
 
 ## Conventions
 

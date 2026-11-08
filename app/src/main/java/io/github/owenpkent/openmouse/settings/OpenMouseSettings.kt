@@ -2,6 +2,7 @@ package io.github.owenpkent.openmouse.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
 
 /**
@@ -69,7 +70,8 @@ class OpenMouseSettings(context: Context) {
         prefs.unregisterOnSharedPreferenceChangeListener(listener)
 
     companion object {
-        private const val PREFS_NAME = "openmouse_settings"
+        @VisibleForTesting
+        internal const val PREFS_NAME = "openmouse_settings"
 
         private const val KEY_DWELL_ENABLED = "dwell_enabled"
         private const val KEY_DWELL_MS = "dwell_ms"

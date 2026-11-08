@@ -20,6 +20,12 @@ tagged release.
   Default 20 dp; it never acts narrower than the movement tolerance.
 - Scroll up / down repeat while the pointer rests: one notch per dwell period,
   instead of needing a fresh move between notches.
+- Automated UI tests (`gradlew connectedDebugAndroidTest`, run in CI on API 30
+  and 34 emulators): the cursor pipeline end to end (a dwell or button click
+  lands exactly under the cross-hair, no double click while resting, tremor
+  tolerance, Pause, Home, double-tap, drag, scroll wheel, cursor rendering), the
+  overlay's safety contract (full display, never locks out the touchscreen,
+  live settings, removed with the service), and the settings and main screens.
 - Jazzer fuzz targets for the pure `DwellMachine` and `MenuGeometry` cores,
   mirroring the PowerToys Dwell Click fuzz target, plus a nightly GitHub Actions
   fuzz workflow and a CI workflow (build, unit tests, lint).

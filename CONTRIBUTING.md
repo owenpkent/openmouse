@@ -14,6 +14,7 @@ gestures.
    ./gradlew assembleDebug   # build the APK
    ./gradlew test            # run JVM unit tests (JUnit 5)
    ./gradlew lint            # static analysis
+   ./gradlew connectedDebugAndroidTest   # UI tests, needs an emulator or device
    ```
    The fuzz targets in `app/src/test/.../fuzz/` are part of `test`, where they
    only replay their seed corpus. To actually fuzz (ten minutes per target):
@@ -42,10 +43,45 @@ adb shell dumpsys window | grep -i openmouse   # overlay attached, NOT_TOUCHABLE
 adb exec-out screencap -p > shot.png           # cross-hair + menu render?
 ```
 
-This verifies the overlay, touch passthrough, rendering, and crashes. What it
-**cannot** do: drive a real mouse cursor. A headless emulator has no mouse device,
+This verifies the overlay, touch passthrough, rendering, and crashes by hand.
+What it **cannot** do: drive the cursor. A headless emulator has no mouse device,
 and the accessibility framework filters `adb input`-injected events out of
-`onMotionEvent`, so the cursor pipeline is covered by the unit tests instead.
+`onMotionEvent`.
+
+### Automated UI tests (emulator or device)
+
+The instrumented suite under `app/src/androidTest/` does all of the above
+automatically and also drives the cursor end to end. With an emulator booted (or
+a device attached):
+
+```bash
+./gradlew connectedDebugAndroidTest
+# one class: add -Pandroid.testInstrumentationRunnerArguments.class=io.github.owenpkent.openmouse.CursorPipelineTest
+```
+
+The tests enable the service themselves over the shell; no setup is needed.
+
+- `CursorPipelineTest` (API 34+) feeds synthetic mouse events straight into the
+  service's `onMotionEvent` (the tests run in the app's process, which is how they
+  get past the input filter). From there everything is real: the dwell timer, the
+  menu, `dispatchGesture`, and a real app window, the debug-only
+  `TouchRecorderActivity`, which records where each injected touch landed. That
+  is how the suite checks that a tap lands exactly under the cross-hair, that a
+  resting pointer does not click twice, and that Pause, Home, double-tap, drag
+  and the scroll wheel behave.
+- `OverlayTest` (every API level) checks the overlay spans the display with the
+  cutout mode, never locks out a finger, follows live settings, and goes away
+  with the service.
+- `SettingsActivityTest` and `MainActivityTest` cover the two screens (Espresso).
+
+CI runs the suite on API 34 (mouse path) and API 30 (legacy touchable overlay).
+When you add a gesture or menu entry, add a `CursorPipelineTest` case that
+drives it through the menu and asserts on `TouchLog`.
+
+Two traps: always get `UiAutomation` with `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`
+(a plain `getUiAutomation()` unbinds every other accessibility service, OpenMouse
+included; use `Device.shell()`), and do not use Espresso clicks while the overlay
+is up on API 24-33, where it is touchable until its idle watchdog fires.
 
 ## Project shape
 

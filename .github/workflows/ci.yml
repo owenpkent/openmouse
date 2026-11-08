@@ -48,3 +48,61 @@ jobs:
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  ui-tests:
+    # Instrumented UI tests (app/src/androidTest) on an emulator. API 34 runs
+    # the whole suite, the onMotionEvent mouse path end to end. On API 30 the
+    # mouse-driven tests skip (that release captures the mouse through the
+    # touchable CursorView); the overlay, idle-watchdog touch-lockout and
+    # settings-screen tests still run there. Legacy gesture passthrough
+    # (runGesture on API 24-33) is not driven by any test yet.
+    name: UI tests (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 34]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Hardware acceleration for the emulator on Linux runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build app and test APKs
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+
+      - name: Run UI tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          # Keep the device log on failure: emulator-only failures are hard to
+          # read from the test report alone.
+          script: ./gradlew connectedDebugAndroidTest --no-daemon || (adb logcat -d > app/build/logcat.txt; exit 1)
+
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-reports-api-${{ matrix.api-level }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/logcat.txt
+          if-no-files-found: ignore

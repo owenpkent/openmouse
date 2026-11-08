@@ -232,6 +232,20 @@ than the rest anchor as zero elapsed time, and a negative item count or column
 count as 0 and 1. Fuzzing is opt-in (`JAZZER_FUZZ=1`); a plain `gradlew test`
 only replays the seed corpus. A nightly workflow runs it for real.
 
+## UI tests: the Android wrappers, end to end
+
+The wrappers are covered by instrumented tests in `app/src/androidTest/`
+(`gradlew connectedDebugAndroidTest`, on an emulator in CI). The platform filters
+shell-injected input out of `onMotionEvent`, so the tests, which run in the app's
+process, take the connected service from `MouseAccessibilityService.connected`
+(a `@VisibleForTesting` weak reference) and call `onMotionEvent` with synthetic
+`SOURCE_MOUSE` events. Everything after that call is production code. Injected
+touches land in `TouchRecorderActivity`, a non-exported activity in the `debug`
+source set (absent from release builds), which logs their screen coordinates so a
+test can compare them with where the cross-hair was. The seam is read-only apart
+from that entry point: `menuEntryAt`, `currentMode`, `hasPendingPoint` and `isPaused` let a test find
+menu entries and observe state, nothing more.
+
 ## Settings and live updates
 
 `SettingsActivity` has no Save button. Each control writes straight to
