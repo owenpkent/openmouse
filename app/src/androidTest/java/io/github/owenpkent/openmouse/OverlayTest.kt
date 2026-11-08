@@ -133,15 +133,6 @@ class OverlayTest {
         assertFalse(OpenMouseService.isEnabledInSettings())
     }
 
-    /** The dumpsys block for OpenMouse's overlay window, or null if none is attached. */
-    private fun overlayWindowDump(): String? {
-        val dump = Device.shell("dumpsys window windows")
-        val blocks = dump.split(Regex("(?m)^\\s*Window #\\d+ "))
-        return blocks.firstOrNull {
-            it.contains("io.github.owenpkent.openmouse}") && it.contains("ACCESSIBILITY_OVERLAY")
-        }
-    }
-
     private companion object {
         val FRAME = Regex("""(?:^|\s)m?[Ff]rame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]""")
     }

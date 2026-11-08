@@ -238,13 +238,16 @@ The wrappers are covered by instrumented tests in `app/src/androidTest/`
 (`gradlew connectedDebugAndroidTest`, on an emulator in CI). The platform filters
 shell-injected input out of `onMotionEvent`, so the tests, which run in the app's
 process, take the connected service from `MouseAccessibilityService.connected`
-(a `@VisibleForTesting` weak reference) and call `onMotionEvent` with synthetic
-`SOURCE_MOUSE` events. Everything after that call is production code. Injected
+(a `@VisibleForTesting` weak reference) and feed synthetic `SOURCE_MOUSE` events
+in where real ones arrive: `onMotionEvent` on API 34+, the `CursorView` overlay
+(`overlayView`) on API 24-33. Everything after that is production code, so on
+the legacy path each injected gesture only reaches the app if the passthrough
+made the overlay click-through for it. Injected
 touches land in `TouchRecorderActivity`, a non-exported activity in the `debug`
 source set (absent from release builds), which logs their screen coordinates so a
 test can compare them with where the cross-hair was. The seam is read-only apart
-from that entry point: `menuEntryAt`, `currentMode`, `hasPendingPoint` and `isPaused` let a test find
-menu entries and observe state, nothing more.
+from those entry points: `menuEntryAt`, `currentMode`, `hasPendingPoint` and
+`isPaused` let a test find menu entries and observe state, nothing more.
 
 ## Settings and live updates
 

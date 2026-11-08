@@ -152,11 +152,20 @@ fun launchTouchRecorder(): Activity {
 }
 
 /**
- * A synthetic mouse, fed straight into [MouseAccessibilityService.onMotionEvent]
- * because the platform filters shell-injected input out of that callback. All
- * coordinates are screen pixels; for these obtained events rawX == x.
+ * A synthetic mouse, fed in where real mouse input arrives on this release:
+ * - API 34+: [MouseAccessibilityService.onMotionEvent]. The platform filters
+ *   shell-injected input out of that callback, hence calling it in-process.
+ * - API 24-33: the touchable CursorView overlay, the way the window system
+ *   delivers it (hover and wheel as generic motion, a held button as touch).
+ *   Everything after that, the passthrough around each injected gesture
+ *   included, is the real legacy path.
+ *
+ * All coordinates are screen pixels. The overlay sits at the screen origin, and
+ * for these obtained events rawX == x, so both paths see the same numbers.
  */
 class Mouse(private val service: MouseAccessibilityService) {
+
+    private val modernInput = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
     var x = 0f
         private set
@@ -185,12 +194,18 @@ class Mouse(private val service: MouseAccessibilityService) {
 
     /** Press (and release) the physical primary button where the pointer is. */
     fun clickPrimary() {
-        val press = event(MotionEvent.ACTION_BUTTON_PRESS, x, y, MotionEvent.BUTTON_PRIMARY)
-        setActionButton(press, MotionEvent.BUTTON_PRIMARY)
-        dispatch(press)
-        val release = event(MotionEvent.ACTION_BUTTON_RELEASE, x, y, 0)
-        setActionButton(release, MotionEvent.BUTTON_PRIMARY)
-        dispatch(release)
+        if (modernInput) {
+            val press = event(MotionEvent.ACTION_BUTTON_PRESS, x, y, MotionEvent.BUTTON_PRIMARY)
+            setActionButton(press, MotionEvent.BUTTON_PRIMARY)
+            dispatch(press)
+            val release = event(MotionEvent.ACTION_BUTTON_RELEASE, x, y, 0)
+            setActionButton(release, MotionEvent.BUTTON_PRIMARY)
+            dispatch(release)
+        } else {
+            // A touchable window receives a held mouse button as a touch stream.
+            dispatch(event(MotionEvent.ACTION_DOWN, x, y, MotionEvent.BUTTON_PRIMARY))
+            dispatch(event(MotionEvent.ACTION_UP, x, y, 0))
+        }
     }
 
     /** Turn the wheel once at the pointer; [notches] > 0 is wheel-up. */
@@ -200,7 +215,18 @@ class Mouse(private val service: MouseAccessibilityService) {
         dispatch(event(action, x, y, 0, vscroll))
 
     private fun dispatch(event: MotionEvent) {
-        Device.onMain { service.onMotionEvent(event) }
+        Device.onMain {
+            if (modernInput) {
+                service.onMotionEvent(event)
+            } else {
+                val view = service.overlayView ?: throw AssertionError("the cursor overlay is gone")
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP ->
+                        view.dispatchTouchEvent(event)
+                    else -> view.dispatchGenericMotionEvent(event)
+                }
+            }
+        }
         event.recycle()
     }
 
@@ -261,6 +287,15 @@ fun MouseAccessibilityService.centerOf(action: GestureAction): PointF? {
             }
         }
         if (maxX < 0f) null else PointF((minX + maxX) / 2f, (minY + maxY) / 2f)
+    }
+}
+
+/** The dumpsys block for OpenMouse's overlay window, or null if none is attached. */
+fun overlayWindowDump(): String? {
+    val dump = Device.shell("dumpsys window windows")
+    val blocks = dump.split(Regex("(?m)^\\s*Window #\\d+ "))
+    return blocks.firstOrNull {
+        it.contains("io.github.owenpkent.openmouse}") && it.contains("ACCESSIBILITY_OVERLAY")
     }
 }
 

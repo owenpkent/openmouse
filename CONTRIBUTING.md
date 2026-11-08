@@ -61,9 +61,11 @@ a device attached):
 
 The tests enable the service themselves over the shell; no setup is needed.
 
-- `CursorPipelineTest` (API 34+) feeds synthetic mouse events straight into the
-  service's `onMotionEvent` (the tests run in the app's process, which is how they
-  get past the input filter). From there everything is real: the dwell timer, the
+- `CursorPipelineTest` feeds synthetic mouse events in where real ones arrive:
+  the service's `onMotionEvent` on API 34+, the touchable `CursorView` overlay on
+  API 24-33 (the tests run in the app's process, which is how they get past the
+  input filter). From there everything is real, including the legacy
+  click-through passthrough around each injected gesture: the dwell timer, the
   menu, `dispatchGesture`, and a real app window, the debug-only
   `TouchRecorderActivity`, which records where each injected touch landed. That
   is how the suite checks that a tap lands exactly under the cross-hair, that a
@@ -74,7 +76,7 @@ The tests enable the service themselves over the shell; no setup is needed.
   with the service.
 - `SettingsActivityTest` and `MainActivityTest` cover the two screens (Espresso).
 
-CI runs the suite on API 34 (mouse path) and API 30 (legacy touchable overlay).
+CI runs the suite on API 34 (`onMotionEvent` path) and API 30 (touchable overlay path).
 When you add a gesture or menu entry, add a `CursorPipelineTest` case that
 drives it through the menu and asserts on `TouchLog`.
 

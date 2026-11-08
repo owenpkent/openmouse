@@ -23,14 +23,13 @@ import kotlin.math.abs
 
 /**
  * End-to-end tests of the cursor pipeline on a real device or emulator: a
- * synthetic mouse feeds [MouseAccessibilityService.onMotionEvent], and the real
- * dwell timer, menu hit test, `dispatchGesture` injection and overlay all run.
- * The touches are read back from a real app window ([TouchLog]), so these check
- * that what the cross-hair points at is exactly what gets touched.
- *
- * The mouse path is the API 34+ one (`onMotionEvent`); on older releases the
- * cursor is driven through the touchable CursorView instead, so those tests are
- * skipped there. See [OverlayTest] for checks that run on every API level.
+ * synthetic [Mouse] feeds the service where real mouse input arrives on this
+ * release (`onMotionEvent` on API 34+, the touchable CursorView before that),
+ * and the real dwell timer, menu hit test, `dispatchGesture` injection and
+ * overlay all run. The touches are read back from a real app window
+ * ([TouchLog]), so these check that what the cross-hair points at is exactly
+ * what gets touched. On API 24-33 every injected gesture also proves the
+ * overlay went click-through for it: otherwise the overlay swallows it.
  */
 @RunWith(AndroidJUnit4::class)
 @LargeTest
@@ -45,10 +44,6 @@ class CursorPipelineTest {
 
     @Before
     fun setUp() {
-        assumeTrue(
-            "the onMotionEvent mouse path exists on API 34+ only",
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE,
-        )
         Device.wakeAndUnlock()
         resetSettings { dwellTimeMs = DWELL_MS.toLong() }
         // A fresh connect per test, so menu state (expanded, mode, paused) and the
@@ -80,6 +75,41 @@ class CursorPipelineTest {
         // Resting on: a dwell click must not repeat until the pointer moves away.
         SystemClock.sleep(DWELL_MS * 3L)
         assertEquals("a resting pointer clicked again", 1, touchDowns().size)
+    }
+
+    @Test
+    fun consecutiveTapsEachLand() {
+        // On API 24-33 the overlay must go click-through for each gesture and
+        // come back afterwards; a passthrough that never ended (or never began
+        // again) would drop the second tap.
+        val size = Device.displaySize()
+        val second = PointF(size.width * 0.4f, size.height * 0.6f)
+
+        mouse.approachAndRest(app)
+        waitUntil("the first tap", TIMEOUT_MS) { touchDowns().size == 1 }
+        mouse.approachAndRest(second)
+        waitUntil("the second tap", TIMEOUT_MS) { touchDowns().size == 2 }
+
+        val (a, b) = touchDowns()
+        assertNear(app, a.x, a.y)
+        assertNear(second, b.x, b.y)
+    }
+
+    @Test
+    fun legacyOverlayCapturesTheMouseAgainAfterAGesture() {
+        assumeTrue(
+            "API 34+ never makes the overlay touchable",
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE,
+        )
+        mouse.approachAndRest(app)
+        waitFor("the dwell tap", TIMEOUT_MS) { touchDowns().firstOrNull() }
+        // Keep the mouse "present" so the idle watchdog has no reason to drop
+        // touchability; then the overlay must be touchable again once the
+        // gesture's passthrough ends, or the mouse would stop reaching it.
+        waitUntil("the overlay to be touchable again", TIMEOUT_MS) {
+            mouse.moveTo(app.x + 1f, app.y)
+            overlayWindowDump()?.let { "NOT_TOUCHABLE" !in it } == true
+        }
     }
 
     @Test

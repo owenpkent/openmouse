@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import androidx.annotation.VisibleForTesting
@@ -505,6 +506,13 @@ class MouseAccessibilityService : AccessibilityService() {
     /** The active tap mode. Main thread. */
     @VisibleForTesting
     internal val currentMode: GestureAction? get() = gestureMenu?.currentMode
+
+    /**
+     * The cursor overlay. On API 24-33 it is where the mouse arrives, so the
+     * tests dispatch synthetic mouse events to it there. Main thread.
+     */
+    @VisibleForTesting
+    internal val overlayView: View? get() = cursorView
 
     /** Whether a two-point gesture (drag/swipe) has its start point and awaits the end. Main thread. */
     @VisibleForTesting

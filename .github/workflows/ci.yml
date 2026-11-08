@@ -50,12 +50,11 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
   ui-tests:
-    # Instrumented UI tests (app/src/androidTest) on an emulator. API 34 runs
-    # the whole suite, the onMotionEvent mouse path end to end. On API 30 the
-    # mouse-driven tests skip (that release captures the mouse through the
-    # touchable CursorView); the overlay, idle-watchdog touch-lockout and
-    # settings-screen tests still run there. Legacy gesture passthrough
-    # (runGesture on API 24-33) is not driven by any test yet.
+    # Instrumented UI tests (app/src/androidTest) on an emulator, one per input
+    # path: API 34 drives the cursor through onMotionEvent with a non-touchable
+    # overlay; API 30 drives it through the touchable CursorView, so every
+    # injected gesture there also exercises the click-through passthrough
+    # (runGesture) and the idle watchdog.
     name: UI tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
