@@ -479,6 +479,9 @@ class MouseAccessibilityService : AccessibilityService() {
             }
             val id = swallowed.dispatched(request, now, injection.strokeStarts)
             dispatcher.dispatch(injection) {
+                // Nothing this gesture injected is stamped later than now, so it
+                // cannot claim the DOWN of a gesture that follows it.
+                swallowed.completed(id, SystemClock.uptimeMillis())
                 // The overlay's input and this callback are not ordered; give
                 // a swallowed DOWN time to arrive before deciding.
                 handler.postDelayed({

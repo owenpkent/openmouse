@@ -115,13 +115,30 @@ class SwallowedGestureTrackerTest {
         fun aLateDownIsAbsorbedByItsOwnSettledGesture() {
             // O was swallowed but its DOWN is slow to arrive; O settles first
             // (not retried: nothing seen yet). W, at the same spot, reached the
-            // app. O's late DOWN must not be credited to W.
+            // app. O's late DOWN must not be credited to W. It carries the time
+            // it was injected (110), not the time it is reported.
             val t = SwallowedGestureTracker()
             val o = t.dispatched(t.requested(), 100L, tap())
             assertFalse(t.settle(o, attempt = 0, nowMs = 150L))
             val w = t.dispatched(t.requested(), 160L, tap())
-            assertTrue(t.overlayTouched(170L, 270f, 960f), "absorbed by O's tombstone")
+            assertTrue(t.overlayTouched(110L, 270f, 960f), "absorbed by O's tombstone")
             assertFalse(t.settle(w, attempt = 0, nowMs = 220L), "W reached the app")
+        }
+
+        @Test
+        fun aLateDownStampedWhileTwoGesturesOverlappedGoesToTheOlder() {
+            // W went out while O was still in flight, so O's DOWN (stamped 106)
+            // is after W's dispatch too, and it is reported only after O
+            // settled. It could be either; the older takes it, and W, which
+            // reached the app, is not resent.
+            val t = SwallowedGestureTracker()
+            val o = t.dispatched(t.requested(), 100L, tap())
+            val w = t.dispatched(t.requested(), 105L, tap())
+            t.completed(o, 108L)
+            assertFalse(t.settle(o, attempt = 0, nowMs = 156L))
+            assertTrue(t.overlayTouched(106L, 270f, 960f), "absorbed by O's tombstone")
+            t.completed(w, 110L)
+            assertFalse(t.settle(w, attempt = 0, nowMs = 158L), "W reached the app")
         }
 
         @Test
@@ -140,6 +157,128 @@ class SwallowedGestureTrackerTest {
             val id = t.dispatched(t.requested(), 100L, tap())
             assertFalse(t.settle(id, attempt = 0, nowMs = 150L))
             assertFalse(t.settle(id, attempt = 0, nowMs = 150L), "an id is answered once")
+        }
+    }
+
+    @Nested
+    inner class ADeliveredGestureNeverTakesALaterOnesDown {
+
+        // The review case: click A reached the app, then click B at the same
+        // spot was swallowed. B's DOWN must be B's, so B is resent.
+
+        @Test
+        fun aSwallowedClickAfterADeliveredOneAtTheSameSpotIsRetried() {
+            val t = SwallowedGestureTracker()
+            val a = t.dispatched(t.requested(), 100L, tap())
+            assertFalse(t.settle(a, attempt = 0, nowMs = 160L), "A was delivered")
+            val b = t.dispatched(t.requested(), 300L, tap())
+            assertTrue(t.overlayTouched(310L, 270f, 960f))
+            assertTrue(t.settle(b, attempt = 0, nowMs = 360L), "B was swallowed and must be resent")
+        }
+
+        @Test
+        fun controlWithNoPreviousClick() {
+            val t = SwallowedGestureTracker()
+            val b = t.dispatched(t.requested(), 300L, tap())
+            assertTrue(t.overlayTouched(310L, 270f, 960f))
+            assertTrue(t.settle(b, attempt = 0, nowMs = 360L))
+        }
+
+        @Test
+        fun controlWithThePreviousTombstoneAlreadyClaimed() {
+            val t = SwallowedGestureTracker()
+            val a = t.dispatched(t.requested(), 100L, tap())
+            assertTrue(t.overlayTouched(110L, 270f, 960f))
+            t.settle(a, attempt = 0, nowMs = 160L)
+            val b = t.dispatched(t.requested(), 300L, tap())
+            assertTrue(t.overlayTouched(310L, 270f, 960f))
+            assertTrue(t.settle(b, attempt = 0, nowMs = 360L))
+        }
+
+        @Test
+        fun controlWithThePreviousTombstoneExpired() {
+            val t = SwallowedGestureTracker()
+            val a = t.dispatched(t.requested(), 100L, tap())
+            assertFalse(t.settle(a, attempt = 0, nowMs = 160L))
+            val bAt = 160L + TOMBSTONE_MS + 1
+            val b = t.dispatched(t.requested(), bAt, tap())
+            assertTrue(t.overlayTouched(bAt + 10, 270f, 960f))
+            assertTrue(t.settle(b, attempt = 0, nowMs = bAt + 60))
+        }
+
+        @Test
+        fun aDeliveredClickThatHasCompletedButNotSettledDoesNotTakeIt() {
+            // B goes out during A's settle wait: A is still outstanding, but
+            // nothing of A can be stamped after its completion at 102.
+            val t = SwallowedGestureTracker()
+            val a = t.dispatched(t.requested(), 100L, tap())
+            t.completed(a, 102L)
+            val b = t.dispatched(t.requested(), 120L, tap())
+            assertTrue(t.overlayTouched(130L, 270f, 960f))
+            assertFalse(t.settle(a, attempt = 0, nowMs = 150L), "A was delivered")
+            t.completed(b, 132L)
+            assertTrue(t.settle(b, attempt = 0, nowMs = 180L), "B was swallowed and must be resent")
+        }
+
+        @Test
+        fun aDownStampedAtTheMomentAGestureEndedIsStillItsOwn() {
+            // Just inside: the last touch can carry the callback's millisecond.
+            val t = SwallowedGestureTracker()
+            val o = t.dispatched(t.requested(), 100L, tap())
+            val w = t.dispatched(t.requested(), 101L, tap())
+            t.completed(o, 104L)
+            assertTrue(t.overlayTouched(104L, 270f, 960f))
+            t.completed(w, 106L)
+            assertFalse(t.settle(o, attempt = 0, nowMs = 152L))
+            assertFalse(t.settle(w, attempt = 0, nowMs = 154L), "the DOWN was O's, so W reached the app")
+        }
+
+        @Test
+        fun aDownStampedOneMillisecondAfterAGestureEndedIsNotItsOwn() {
+            // Just outside: O had ended, so only W can have produced it.
+            val t = SwallowedGestureTracker()
+            val o = t.dispatched(t.requested(), 100L, tap())
+            val w = t.dispatched(t.requested(), 101L, tap())
+            t.completed(o, 104L)
+            assertTrue(t.overlayTouched(105L, 270f, 960f))
+            t.completed(w, 106L)
+            assertFalse(t.settle(o, attempt = 0, nowMs = 152L))
+            assertTrue(t.settle(w, attempt = 0, nowMs = 154L), "the DOWN was W's")
+        }
+
+        @Test
+        fun withoutACompletionTheSettleIsTheEnd() {
+            val t = SwallowedGestureTracker()
+            val o = t.dispatched(t.requested(), 100L, tap())
+            val w = t.dispatched(t.requested(), 101L, tap())
+            t.settle(o, attempt = 0, nowMs = 150L)
+            assertTrue(t.overlayTouched(150L, 270f, 960f), "inside O's window: O's")
+            assertTrue(t.overlayTouched(151L, 270f, 960f), "past it: W's")
+            assertTrue(t.settle(w, attempt = 0, nowMs = 200L))
+        }
+
+        @Test
+        fun aCompletionIsRecordedOnceAndUnknownIdsAreIgnored() {
+            val t = SwallowedGestureTracker()
+            t.completed(42, 0L)
+            t.completed(-1, Long.MIN_VALUE)
+            val o = t.dispatched(t.requested(), 100L, tap())
+            val w = t.dispatched(t.requested(), 101L, tap())
+            t.completed(o, 104L)
+            t.completed(o, 500L) // a repeat does not widen the window
+            assertTrue(t.overlayTouched(200L, 270f, 960f))
+            assertFalse(t.settle(o, attempt = 0, nowMs = 250L))
+            assertTrue(t.settle(w, attempt = 0, nowMs = 260L), "the DOWN was W's")
+        }
+
+        @Test
+        fun aCompletionBeforeTheDispatchLeavesTheGestureNothingToClaim() {
+            // Time running backwards: an empty window, defined and harmless.
+            val t = SwallowedGestureTracker()
+            val o = t.dispatched(t.requested(), 100L, tap())
+            t.completed(o, 50L)
+            assertFalse(t.overlayTouched(100L, 270f, 960f))
+            assertFalse(t.settle(o, attempt = 0, nowMs = 150L))
         }
     }
 
