@@ -665,8 +665,12 @@ class DwellMachineTest {
 
             m.setExternalButtonHeld(false)
             assertFalse(m.poll(2000L).clicked) // parked on the entry: locked
-            m.onMove(100f, 100f, 2000L, restKey = "other") // entering another entry arms
-            assertTrue(m.poll(2100L).clicked)
+            // Locked, an entry that changes under a still pointer is not entered
+            // (the dock rule); travelling clear of the lock onto one is.
+            m.onMove(100f, 100f, 2000L, restKey = "other")
+            assertFalse(m.poll(2100L).clicked)
+            m.onMove(115f, 100f, 2200L, restKey = "other")
+            assertTrue(m.poll(2300L).clicked)
         }
 
         @Test
@@ -674,17 +678,19 @@ class DwellMachineTest {
             // The service feeds the release position while the machine still
             // reads held, then the release, so the lock the release leaves
             // anchors on the entry under the pointer. Reported the other way
-            // round, the release would lock on the old key and the move onto
-            // the new entry would arm it.
+            // round, the release would lock on the old key and the move inside
+            // Back would count as entering it.
             val m = machine()
             arm(m)
             m.setExternalButtonHeld(true) // pressed on the app
             m.onMove(300f, 300f, 10L, restKey = "back") // dragged onto Back, still held
             m.setExternalButtonHeld(false) // let go on Back
             assertFalse(m.poll(10_000L).clicked)
-            m.onMove(301f, 300f, 10_000L, restKey = "back") // a tremor on the same entry
+            // Past the tolerance but still inside Back: no distance counts within
+            // an entry, so this stays locked only if the lock is on Back.
+            m.onMove(312f, 300f, 10_000L, restKey = "back")
             assertFalse(m.poll(20_000L).clicked)
-            m.onMove(300f, 300f, 20_000L, restKey = "home") // a different entry arms
+            m.onMove(315f, 300f, 20_000L, restKey = "home") // clear of the lock, onto another entry
             assertTrue(m.poll(20_100L).clicked)
         }
     }
