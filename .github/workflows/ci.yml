@@ -178,8 +178,9 @@ jobs:
 
       # The release scripts are not exercised by any Gradle test. Parse the
       # PowerShell publisher (a stray backtick once escaped a closing quote and
-      # broke the whole file) and run the tag verifier's usage and
-      # unsigned-tag paths, so a release day does not start with a syntax error.
+      # broke the whole file) and run the tag verifier's usage, unsigned-tag,
+      # accepting and untrusted-key paths, so a release day does not start with
+      # a syntax error or a verifier that refuses everything.
       - name: Release scripts parse and refuse what they should
         shell: bash
         run: |
@@ -192,6 +193,18 @@ jobs:
           git -c user.name=ci -c user.email=ci@invalid -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
           if sh scripts/verify-release-tag.sh v9.9.9; then echo "::error::an unsigned tag verified"; exit 1; fi
           git tag -d v9.9.9
+          # The accepting path: a throwaway key, listed only in a release-signers
+          # committed as a loose object (no branch), must verify through
+          # OPENMOUSE_SIGNERS_REF, and must not verify against this tree's file.
+          ssh-keygen -q -t ed25519 -N "" -C ci -f "$RUNNER_TEMP/ci-key"
+          printf 'ci namespaces="git" %s\n' "$(cut -d' ' -f1,2 "$RUNNER_TEMP/ci-key.pub")" > "$RUNNER_TEMP/signers"
+          blob=$(git hash-object -w "$RUNNER_TEMP/signers")
+          tree=$(printf '100644 blob %s\trelease-signers\n' "$blob" | git mktree)
+          trusted=$(git -c user.name=ci -c user.email=ci@invalid commit-tree "$tree" -m "ci signers")
+          git -c user.name=ci -c user.email=ci@invalid -c gpg.format=ssh -c user.signingkey="$RUNNER_TEMP/ci-key.pub" tag -s v9.9.8 -m "signed test tag"
+          OPENMOUSE_SIGNERS_REF=$trusted sh scripts/verify-release-tag.sh v9.9.8
+          if OPENMOUSE_SIGNERS_REF=HEAD sh scripts/verify-release-tag.sh v9.9.8; then echo "::error::a key outside the trusted release-signers verified"; exit 1; fi
+          git tag -d v9.9.8
 
       - name: Upload release lint report
         if: always()

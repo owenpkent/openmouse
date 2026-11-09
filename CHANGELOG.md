@@ -67,6 +67,27 @@ tagged release.
   sticky scroll or a drag waiting for its end point is visible where you are
   looking, not only on the menu at the screen edge. It sits up and to the left
   of the cross-hair and flips to the other side near an edge.
+- `scripts/verify-release-tag.sh` trusts only the `release-signers` on `main`
+  (`refs/remotes/origin/main`, overridable with `OPENMOUSE_SIGNERS_REF`), never
+  the copy in the tag being verified, so a tag cannot bring its own key. It
+  forces git's SSH backend, requires ssh-keygen's `Good "git" signature for`
+  verdict, and accepts only a single SSH signature block at the very end of
+  the tag with no OpenPGP or X.509 marker. CI now also checks that a trusted
+  key verifies and an unlisted one does not.
+- The release signing certificate is pinned: `release-cert.sha256` holds its
+  SHA-256, `scripts/publish-release.ps1` refuses to publish an APK that
+  `apksigner` does not verify or that has any other signer (`-CheckApk <apk>`
+  runs that check alone), and `ReleaseMetadataTest` checks the file's format.
+- `docs/SIGNING.md`: the release key and why it is never committed (a public
+  key would let anyone ship an "update" to a service that injects taps),
+  backups, publishing from a second machine, what a lost key means, and why
+  debug, GitHub and F-Droid installs cannot update each other.
+- `docs/TROUBLESHOOTING.md`: build errors, installing (package conflicts,
+  unknown sources, the Android 13+ "Restricted setting" block), the cursor and
+  touchscreen watchdogs, mouse disconnects, and what the in-app updater's
+  messages mean.
+- `assembleDebug` and `installDebug` copy the debug APK to
+  `apks/openmouse-v<versionName>-debug.apk` for sideloading (`apks/README.md`).
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in

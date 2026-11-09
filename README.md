@@ -36,6 +36,10 @@ F-Droid and Play builds leave the updater out and never use the network.
 
 Then open OpenMouse, enable **OpenMouse cursor** in Accessibility settings, and
 plug in a mouse (details under [Enabling](#enabling-openmouse-on-a-device)).
+If Android blocks the install or says "Restricted setting", or the cursor
+misbehaves, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). The GitHub,
+F-Droid and debug builds are signed with different keys and cannot update each
+other ([docs/SIGNING.md](docs/SIGNING.md)).
 
 ## Why "integrated directly into Android"
 
@@ -147,11 +151,17 @@ Kotlin plugin), targets **SDK 36**, and the committed Gradle wrapper pins
 ./gradlew connectedDebugAndroidTest   # run the UI tests (emulator or device)
 ```
 
+`assembleDebug` and `installDebug` also leave a version-named copy at
+`apks/openmouse-v<versionName>-debug.apk` ([apks/README.md](apks/README.md)).
+
 If Android Studio does not create `local.properties`, add it with your SDK path:
 
 ```
 sdk.dir=/path/to/Android/Sdk
 ```
+
+Build errors (JDK, SDK path, wrapper) are covered in
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#building).
 
 ## Enabling OpenMouse on a device
 
@@ -276,6 +286,10 @@ community. The roadmap items above are good starting points.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): community standards
 - [SECURITY.md](SECURITY.md): reporting a vulnerability
 - [docs/RELEASING.md](docs/RELEASING.md): the plan for shipping to F-Droid / Play
+- [docs/SIGNING.md](docs/SIGNING.md): the release key, and why builds from
+  different sources cannot update each other
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): build, install, cursor and
+  update problems
 - [docs/UPSTREAMING.md](docs/UPSTREAMING.md): the plan for getting it into Android
   natively (AOSP / LineageOS)
 

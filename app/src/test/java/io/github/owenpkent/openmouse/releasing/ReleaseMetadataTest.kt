@@ -15,7 +15,9 @@ import java.io.File
  * - fastlane/metadata/android/en-US/changelogs/<versionCode>.txt (F-Droid and
  *   Play read it; Play caps it at 500 characters),
  * - the F-Droid metadata's CurrentVersion, CurrentVersionCode and build entry,
- * - at least one key in release-signers, or no tag can verify.
+ * - at least one key in release-signers, or no tag can verify,
+ * - one well-formed certificate digest in release-cert.sha256, which the
+ *   publish script checks the signed APK against.
  *
  * Gradle runs unit tests with the module directory as the working directory, so
  * the repository root is found by walking up to CHANGELOG.md.
@@ -77,6 +79,22 @@ class ReleaseMetadataTest {
                 "release-signers line is not '<principal> namespaces=\"git\" <keytype> <key>': $line",
             )
         }
+    }
+
+    @Test
+    fun releaseCertIsOnePinnedSha256() {
+        // scripts/publish-release.ps1 compares the built APK's signer against
+        // this line and refuses on a mismatch; a malformed file would make every
+        // release fail there instead of here. The exact value is not pinned in
+        // this test on purpose: release-cert.sha256 is the one place it lives.
+        val lines = root.resolve("release-cert.sha256").readLines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        assertEquals(1, lines.size, "release-cert.sha256 must hold exactly one digest line, found ${lines.size}")
+        assertTrue(
+            Regex("""[0-9a-f]{64}""").matches(lines.single()),
+            "release-cert.sha256 is not a lowercase 64-hex SHA-256: ${lines.single()}",
+        )
     }
 
     private companion object {

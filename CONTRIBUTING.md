@@ -16,6 +16,10 @@ gestures.
    ./gradlew lint            # static analysis
    ./gradlew connectedDebugAndroidTest   # UI tests, needs an emulator or device
    ```
+   `assembleDebug` and `installDebug` also copy the APK to
+   `apks/openmouse-v<versionName>-debug.apk` for sideloading
+   ([apks/README.md](apks/README.md)). Build errors (JDK, SDK path, wrapper) are
+   in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#building).
    The fuzz targets in `app/src/test/.../fuzz/` are part of `test`, where they
    only replay their seed corpus. To actually fuzz (ten minutes per target):
    ```bash
@@ -29,7 +33,12 @@ gestures.
    ```
 
 To try a change on hardware: install the debug APK, plug in a mouse (USB OTG or
-Bluetooth), and enable **OpenMouse cursor** in Accessibility settings.
+Bluetooth), and enable **OpenMouse cursor** in Accessibility settings. A debug
+build is signed with your machine's debug key, so it will not install over a
+GitHub or F-Droid copy ("package conflicts"); uninstall that first. See
+[docs/SIGNING.md](docs/SIGNING.md#which-builds-can-update-which), and
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for the Android 13+
+"Restricted setting" block and other device problems.
 
 ### Smoke-testing on an emulator (no device needed)
 

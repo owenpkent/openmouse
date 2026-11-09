@@ -1,0 +1,12 @@
+# SHA-256 of the certificate that signs OpenMouse APKs on GitHub Releases:
+# the "Signer #1 certificate SHA-256 digest" line of
+#   apksigner verify --print-certs openmouse-vX.Y.Z.apk
+# for the key openmouse-release.jks (alias openmouse, CN=Owen Kent, O=OpenMouse,
+# C=US), which signed v0.1.0. scripts/publish-release.ps1 refuses to publish an
+# APK signed with anything else, because Android and the in-app updater only
+# install an update signed with the certificate users already have.
+#
+# Changing this line means changing the signing key, which strands every
+# existing install (no update path, only uninstall and reinstall). Read
+# docs/SIGNING.md before touching it. ReleaseMetadataTest checks the format.
+39d33daa9d4f31a0153f631d1dc2accf45197fb810cecf4923304c1ad1f4d50f
