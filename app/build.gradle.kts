@@ -81,6 +81,29 @@ android {
     }
 }
 
+// Drops a version-named copy of the debug APK in the repo-root apks/ folder
+// (apks/README.md), a stable place to grab a build to sideload. The name tracks
+// versionName above. A debug build is signed with this machine's debug key, so
+// it never belongs on a GitHub Release (docs/SIGNING.md). Everything the task
+// needs is resolved here, at configuration time, so it stays compatible with
+// the configuration cache (the rename is a plain string, not a lambda, which
+// would capture the build script); the AOSP Android.bp build never runs Gradle.
+val debugApkName = "openmouse-v${android.defaultConfig.versionName ?: "dev"}-debug.apk"
+val copyDebugApkToRoot = tasks.register<Copy>("copyDebugApkToRoot") {
+    description = "Copies the debug APK to apks/openmouse-v<versionName>-debug.apk."
+    from(layout.buildDirectory.dir("outputs/apk/debug")) {
+        include("app-debug.apk")
+        rename("app-debug\\.apk", debugApkName)
+    }
+    into(rootProject.layout.projectDirectory.dir("apks"))
+}
+
+// Hooked to packageDebug, which writes the APK and which both assembleDebug and
+// installDebug run through, so either entry point refreshes the copy.
+tasks.matching { it.name == "packageDebug" }.configureEach {
+    finalizedBy(copyDebugApkToRoot)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
