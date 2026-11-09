@@ -678,8 +678,8 @@ class DwellMachineTest {
             // The service feeds the release position while the machine still
             // reads held, then the release, so the lock the release leaves
             // anchors on the entry under the pointer. Reported the other way
-            // round, the release would lock on the old key and the move inside
-            // Back would count as entering it.
+            // round, the release would lock where the drag started, on the old
+            // key, and the move onto Back would arm it at once.
             val m = machine()
             arm(m)
             m.setExternalButtonHeld(true) // pressed on the app
@@ -692,6 +692,20 @@ class DwellMachineTest {
             assertFalse(m.poll(20_000L).clicked)
             m.onMove(315f, 300f, 20_000L, restKey = "home") // clear of the lock, onto another entry
             assertTrue(m.poll(20_100L).clicked)
+        }
+
+        @Test
+        fun theReleaseMustBeReportedAfterTheMoveThatCarriedIt() {
+            // The contrast case for the test above: the release reported before
+            // the move it ended locks where the drag started, over the app, so
+            // the move onto Back clears that lock and arms Back. This is why
+            // CursorView and onMotionEvent feed the position first.
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true)
+            m.setExternalButtonHeld(false) // released before the move is seen
+            m.onMove(300f, 300f, 10L, restKey = "back")
+            assertTrue(m.poll(10_000L).clicked)
         }
     }
 

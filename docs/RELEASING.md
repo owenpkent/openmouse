@@ -124,10 +124,13 @@ for every merged pull request, because each needs the owner's signature.
    disagree, so CI catches a half-done bump.
 2. Merge, and wait for the `Tests` run on that commit on `main` to pass.
 3. From a clean checkout of that commit, tag and sign, with the notes as the
-   tag message. Keep the notes in a file so a failed attempt costs only a retry:
+   tag message. Keep the notes in `dist/notes.md` (gitignored, so the publish
+   script still sees a clean tree) so a failed attempt costs only a retry, and
+   pass `--cleanup=verbatim`: git's default for tags strips every line that
+   starts with `#`, which would drop the markdown headings from the notes:
 
    ```sh
-   git tag -s v0.2.0 -F notes.txt
+   git tag -s v0.2.0 --cleanup=verbatim -F dist/notes.md
    scripts/verify-release-tag.sh v0.2.0
    git push origin v0.2.0
    ```

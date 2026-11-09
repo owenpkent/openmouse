@@ -10,13 +10,15 @@
 #   build falls back to an unsigned APK without it. The file is kept a week for a
 #   look, not for use.
 # - `ui-tests` runs the instrumented UI tests on API 30 and 34 emulators.
+# - `osv` (pull requests only) fails on a known vulnerability the pull request
+#   introduces; the steps are in osv-diff.yml.
 # - `Tests` needs all of them and fails if any did not succeed. Branch protection on
 #   main requires that one check, so a job added here is covered by adding it to
 #   the aggregate's `needs` and its check below; see CONTRIBUTING.md, Gates.
 #
 # Actions are pinned to a commit, with the tag in a comment, and the checkout
 # keeps no credentials, so a compromised tag or a step that runs project code
-# cannot push. Dependabot (when added) moves the pins.
+# cannot push. Dependabot (.github/dependabot.yml) moves the pins.
 name: CI
 
 on:

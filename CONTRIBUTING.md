@@ -159,7 +159,10 @@ Most new gestures follow the same path:
 1. Add a value to `GestureAction` (in `menu/GestureMenu.kt`).
 2. Add it to `GestureMenu`'s `items` list and draw its symbol in `drawGlyph`
    (the dock shows glyphs, not words). The grid resizes itself via
-   `MenuGeometry` (two columns, more on a short screen).
+   `MenuGeometry` (two columns, more on a short screen). A sticky mode is named
+   in words only by the badge beside the cross-hair: add a `badge_*` string and
+   its branch in `GestureMenu.labelFor` (the `when` is exhaustive, so the build
+   fails until you decide).
 3. Add the injection method to `GestureDispatcher`: it builds and returns an
    `Injection` (the `GestureDescription` plus each stroke's start point, in
    stroke order). Use existing methods as a template. The start points must be

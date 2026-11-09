@@ -209,11 +209,20 @@ Write-Host "SHA-256: $sha"
 # be the single trailing part, so the notes are everything before it. Written
 # without a BOM, which Windows PowerShell's Out-File -Encoding utf8 would add.
 $notesFile = Join-Path $distDir "openmouse-$tag.notes.md"
-$message = (git tag -l --format='%(contents)' $tag) -join "`n"
+# Decode git's output as UTF-8 whatever the console code page, so non-ASCII
+# notes are not garbled.
+$previousEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+try { $message = (git tag -l --format='%(contents)' $tag) -join "`n" }
+finally { [Console]::OutputEncoding = $previousEncoding }
 $cut = $message.IndexOf("-----BEGIN SSH SIGNATURE-----")
 if ($cut -ge 0) { $message = $message.Substring(0, $cut) }
 $message = $message.TrimEnd()
 if (-not $message) { Fail "the tag message of $tag is empty; the release notes come from it" }
+# A tag made without --cleanup=verbatim loses every line starting with '#'.
+if ($message -notmatch '(?m)^#') {
+    Write-Warning "the notes of $tag have no markdown heading; if the notes file had some, the tag was made without --cleanup=verbatim (docs/RELEASING.md)"
+}
 [System.IO.File]::WriteAllText($notesFile, $message + "`n", (New-Object System.Text.UTF8Encoding($false)))
 
 gh release view $tag *> $null

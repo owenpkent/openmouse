@@ -227,6 +227,9 @@ classes with no Android dependencies, so it runs as fast JVM unit tests:
 - `PassthroughGate` -- when the legacy overlay goes click-through and comes back
 - `SwallowedGestureTracker` -- spotting a gesture the legacy overlay swallowed,
   and deciding whether it is safe to send it again
+- `BadgePlacement` -- where the action badge sits beside the cross-hair
+- `ReleaseFeed` and `LaunchCheck` -- reading GitHub's release feed (version
+  compare, asset and URL allow-lists) and whether to check at launch
 
 ```bash
 ./gradlew test          # run all unit tests (fuzz targets replay their seed corpus)
@@ -247,8 +250,9 @@ JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'   # ten minutes pe
 ```
 
 The [nightly workflow](.github/workflows/nightly-fuzz.yml) runs each target for
-ten minutes and uploads any reproducing input as an artifact; commit it under
-`app/src/test/resources/` to keep it as a regression test.
+ten minutes and opens (or comments on) a `Fuzz crash: <target>` issue with any
+reproducing input; commit it under `app/src/test/resources/` to keep it as a
+regression test.
 
 ### UI tests
 

@@ -135,6 +135,8 @@ class GestureMenu(private val context: Context) {
      * draws symbols, so the badge is the one place a mode is named in words.
      * Null for anything that is not a sticky mode (a plain tap shows no badge;
      * navigation, pause and the toggle act at once and never become the mode).
+     * The `when` lists every action with no `else`, so a new [GestureAction]
+     * does not compile until it is given a name here or explicitly none.
      */
     fun labelFor(action: GestureAction): String? {
         val res = when (action) {
@@ -144,7 +146,15 @@ class GestureMenu(private val context: Context) {
             GestureAction.SWIPE -> R.string.badge_swipe
             GestureAction.SCROLL_UP -> R.string.badge_scroll_up
             GestureAction.SCROLL_DOWN -> R.string.badge_scroll_down
-            else -> return null
+            GestureAction.TAP,
+            GestureAction.BACK,
+            GestureAction.HOME,
+            GestureAction.RECENTS,
+            GestureAction.NOTIFICATIONS,
+            GestureAction.QUICK_SETTINGS,
+            GestureAction.PAUSE,
+            GestureAction.TOGGLE,
+            -> return null
         }
         return context.getString(res)
     }
