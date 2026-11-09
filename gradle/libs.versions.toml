@@ -1,10 +1,10 @@
 [versions]
 # AGP 9 ships built-in Kotlin support, so there is no separate Kotlin plugin
 # version to manage here.
-agp = "9.0.1"
-coreKtx = "1.13.1"
-appcompat = "1.7.0"
-material = "1.12.0"
+agp = "9.5.1"
+coreKtx = "1.19.1"
+appcompat = "1.8.0"
+material = "1.14.0"
 junitJupiter = "5.14.4"
 junitPlatform = "1.14.4"
 # Jazzer is the JVM libFuzzer: the fuzz tests under app/src/test/.../fuzz run as
