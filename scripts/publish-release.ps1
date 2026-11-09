@@ -11,7 +11,10 @@
          from a key in release-signers, named for the tag, with a message).
       3. Builds assembleRelease. keystore.properties must exist so the APK is
          signed: Android (and the in-app updater) only install an update signed
-         with the same certificate as the installed app.
+         with the same certificate as the installed app. The built APK must
+         verify with apksigner and carry exactly one signer whose SHA-256 is the
+         one pinned in release-cert.sha256 (docs/SIGNING.md), so a debug key, a
+         new key or the wrong keystore never reaches users.
       4. Writes dist/openmouse-v<version>.apk and its SHA-256, and creates the
          GitHub Release for the tag (gh release create --verify-tag) with the
          tag message as the notes and the APK attached.
@@ -27,13 +30,20 @@
     Reuse app/build/outputs/apk/release/app-release.apk from an earlier build
     of the same tag instead of building again.
 
+.PARAMETER CheckApk
+    Only check that the given APK is signed with the pinned release certificate
+    (step 3's check), then exit: 0 when it is, 1 when it is not. Needs no tag,
+    keystore or gh. Use it on a downloaded release asset or a local build.
+
 .EXAMPLE
     pwsh -File scripts\publish-release.ps1
     pwsh -File scripts\publish-release.ps1 -Draft
+    pwsh -File scripts\publish-release.ps1 -CheckApk dist\openmouse-v0.1.0.apk
 #>
 param(
     [switch]$Draft,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$CheckApk
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,6 +54,83 @@ Set-Location $repoRoot
 function Fail($message) {
     Write-Host "publish-release: $message" -ForegroundColor Red
     exit 1
+}
+
+# Gradle and apksigner both need a JDK; Android Studio bundles one.
+if (-not $env:JAVA_HOME) {
+    $jbr = "C:\Program Files\Android\Android Studio\jbr"
+    if (Test-Path $jbr) { $env:JAVA_HOME = $jbr }
+}
+
+# --- Release certificate pin -------------------------------------------------
+# The one place the expected certificate is written is release-cert.sha256 (one
+# 64-hex line, # comments allowed; ReleaseMetadataTest checks its format).
+function Get-PinnedCertSha256 {
+    $file = Join-Path $repoRoot "release-cert.sha256"
+    if (-not (Test-Path $file)) { Fail "release-cert.sha256 is missing; it pins the release signing certificate (docs/SIGNING.md)" }
+    $lines = @(Get-Content $file | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith("#") })
+    if ($lines.Count -ne 1 -or $lines[0] -cnotmatch '^[0-9a-f]{64}$') {
+        Fail "release-cert.sha256 must hold exactly one lowercase 64-hex SHA-256 line"
+    }
+    return $lines[0]
+}
+
+# The SDK the build uses: ANDROID_HOME, then ANDROID_SDK_ROOT, then sdk.dir in
+# local.properties (a Java properties file, so \: and \\ are escapes).
+function Get-SdkDir {
+    foreach ($candidate in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT)) {
+        if ($candidate -and (Test-Path $candidate)) { return $candidate }
+    }
+    $localProps = Join-Path $repoRoot "local.properties"
+    if (Test-Path $localProps) {
+        $line = Get-Content $localProps | Where-Object { $_ -match '^\s*sdk\.dir\s*=' } | Select-Object -First 1
+        if ($line) {
+            $dir = (($line -replace '^\s*sdk\.dir\s*=\s*', '') -replace '\\(.)', '$1').Trim()
+            if (Test-Path $dir) { return $dir }
+        }
+    }
+    Fail "Android SDK not found; set ANDROID_HOME or sdk.dir in local.properties"
+}
+
+# apksigner from the newest build-tools that has one.
+function Get-Apksigner {
+    $buildTools = Join-Path (Get-SdkDir) "build-tools"
+    if (-not (Test-Path $buildTools)) { Fail "no build-tools under $buildTools; install them with the SDK manager" }
+    $names = @("apksigner.bat", "apksigner")
+    $newest = Get-ChildItem $buildTools -Directory |
+        Where-Object { $dir = $_.FullName; @($names | Where-Object { Test-Path (Join-Path $dir $_) }).Count -gt 0 } |
+        Sort-Object { $v = $null; if ([version]::TryParse(($_.Name -replace '-.*$', ''), [ref]$v)) { $v } else { [version]"0.0" } } |
+        Select-Object -Last 1
+    if (-not $newest) { Fail "no apksigner in any build-tools under $buildTools" }
+    foreach ($name in $names) {
+        $path = Join-Path $newest.FullName $name
+        if (Test-Path $path) { return $path }
+    }
+}
+
+# Refuses (exits 1) unless $apk verifies and has exactly one signer whose
+# certificate SHA-256 is the pinned one.
+function Assert-ReleaseCert($apk) {
+    if (-not (Test-Path $apk)) { Fail "$apk does not exist" }
+    $expected = Get-PinnedCertSha256
+    $apksigner = Get-Apksigner
+    $output = & $apksigner verify --print-certs $apk
+    if ($LASTEXITCODE -ne 0) { Fail "apksigner says $apk does not verify (unsigned or damaged); not publishing" }
+    $digests = @($output | ForEach-Object {
+        $m = [regex]::Match($_, '^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$')
+        if ($m.Success) { $m.Groups[1].Value.ToLower() }
+    })
+    if ($digests.Count -ne 1) { Fail "$apk has $($digests.Count) signers; a release has exactly one" }
+    if ($digests[0] -ne $expected) {
+        Fail ("$apk is signed with certificate SHA-256 $($digests[0]), not the release certificate $expected " +
+            "from release-cert.sha256. Users could not update to it. Is keystore.properties pointing at openmouse-release.jks? (docs/SIGNING.md)")
+    }
+    Write-Host "Signing certificate matches release-cert.sha256 ($expected)" -ForegroundColor Green
+}
+
+if ($CheckApk) {
+    Assert-ReleaseCert $CheckApk
+    exit 0
 }
 
 # --- 1. Version and checkout state -----------------------------------------
@@ -77,10 +164,6 @@ if ($LASTEXITCODE -ne 0) { Fail "$tag does not verify; not building" }
 if (-not (Test-Path (Join-Path $repoRoot "keystore.properties"))) {
     Fail "keystore.properties is missing, so the APK would be unsigned (see keystore.properties.example)"
 }
-if (-not $env:JAVA_HOME) {
-    $jbr = "C:\Program Files\Android\Android Studio\jbr"
-    if (Test-Path $jbr) { $env:JAVA_HOME = $jbr }
-}
 $apkPath = Join-Path $repoRoot "app\build\outputs\apk\release\app-release.apk"
 if ($SkipBuild) {
     if (-not (Test-Path $apkPath)) { Fail "-SkipBuild given but $apkPath does not exist" }
@@ -91,6 +174,7 @@ if ($SkipBuild) {
     if ($LASTEXITCODE -ne 0) { Fail "gradlew assembleRelease failed" }
     if (-not (Test-Path $apkPath)) { Fail "expected a signed APK at $apkPath (an unsigned build writes app-release-unsigned.apk)" }
 }
+Assert-ReleaseCert $apkPath
 
 $distDir = Join-Path $repoRoot "dist"
 New-Item -ItemType Directory -Force $distDir | Out-Null
