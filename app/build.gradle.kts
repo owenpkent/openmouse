@@ -95,6 +95,18 @@ android {
     }
 }
 
+// The updater's permissions (INTERNET, REQUEST_INSTALL_PACKAGES) and its
+// FileProvider sit in their own manifest, merged in only when the updater is
+// compiled in. Adding rather than removing means a -PopenmouseUpdater=false
+// build never declares them at all, with no tools:node="remove" to keep in step.
+androidComponents {
+    onVariants { variant ->
+        if (updaterEnabled) {
+            variant.sources.manifests.addStaticManifestFile("src/updater/AndroidManifest.xml")
+        }
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

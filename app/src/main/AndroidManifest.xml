@@ -2,16 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        Both permissions exist for the optional update check (Settings > Updates),
-        the app's only network path: INTERNET to ask GitHub Releases for the
-        latest version and fetch the APK, REQUEST_INSTALL_PACKAGES to hand that
-        APK to the system installer. The check runs once per launch (on by
-        default, can be turned off) or when the user asks; installing always
-        needs the user's go-ahead. F-Droid and Play builds compile the feature
-        out (-PopenmouseUpdater=false) and never use either.
+        No permissions here on purpose. The updater's INTERNET and
+        REQUEST_INSTALL_PACKAGES permissions and its FileProvider live in
+        src/updater/AndroidManifest.xml, which app/build.gradle.kts merges in
+        only when the updater is compiled in. F-Droid and Play builds
+        (-PopenmouseUpdater=false) therefore declare none of them.
     -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -53,17 +49,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
-        <!-- Exposes the downloaded update APK (cache/updates/) to the installer. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
 
     </application>
 

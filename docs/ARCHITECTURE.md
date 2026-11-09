@@ -316,6 +316,11 @@ the network**, and it is built to stay narrow:
 - **Compile-out.** `BuildConfig.UPDATER_ENABLED` comes from the Gradle property
   `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
   Settings section and skips the launch check (R8 then drops the updater code).
+  The updater's manifest entries (`INTERNET`, `REQUEST_INSTALL_PACKAGES`, the
+  `FileProvider`) live in `app/src/updater/AndroidManifest.xml`, which
+  `app/build.gradle.kts` merges in (`sources.manifests.addStaticManifestFile`)
+  only when the updater is compiled in, so a flag-off APK declares no network
+  permission at all.
   The F-Droid recipe and the Play build both pass it: both stores sign with
   their own key and ship updates themselves, and Play policy forbids an app
   updating itself outside Play. Those builds make no network connection.

@@ -18,9 +18,10 @@ tagged release.
   refuses any APK not signed with the same key as the installed copy, and
   leaves the final step to the system installer. The feature compiles out with
   `-PopenmouseUpdater=false`, which the F-Droid recipe and the Play build use:
-  those builds make no network connection at all. This adds the
-  `INTERNET` and `REQUEST_INSTALL_PACKAGES` permissions; the privacy policy
-  describes the one network use.
+  those builds make no network connection at all. The sideload build gains the
+  `INTERNET` and `REQUEST_INSTALL_PACKAGES` permissions (and a `FileProvider`
+  for the downloaded APK); builds with the updater compiled out declare
+  neither. The privacy policy describes the one network use.
 - An action badge beside the cross-hair names the current mode (double-tap,
   hold, drag, swipe, scroll up or down) whenever it is not a plain tap, so a
   sticky scroll or a drag waiting for its end point is visible where you are

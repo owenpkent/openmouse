@@ -18,7 +18,8 @@ The one network feature is the update check. Which build you have decides
 whether it exists at all:
 
 - **F-Droid and Google Play builds** have the update check compiled out. They
-  make no network connection of any kind, and their store delivers updates.
+  do not even hold the `INTERNET` permission, so they cannot make a network
+  connection of any kind, and their store delivers updates.
 - **The APK from GitHub Releases** (the "sideload" build) includes it, because
   nothing else would tell you a new version exists.
 
@@ -64,9 +65,10 @@ the "retrieve window content" capability.
 
 ## Permissions
 
-The app requests no runtime permissions. It declares two install-time
-permissions, both for the update check described above (F-Droid and Play builds
-declare them too but never use them, because the feature is compiled out):
+The app requests no runtime permissions. F-Droid and Google Play builds declare
+no network permission at all (and no permission to install apps). The sideload
+build from GitHub Releases declares two install-time permissions, both for the
+update check described above:
 
 - `INTERNET`: to contact GitHub for the update check.
 - `REQUEST_INSTALL_PACKAGES`: to hand a downloaded update to Android's package

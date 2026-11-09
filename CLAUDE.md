@@ -15,7 +15,7 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 ## Stack & layout
 
 - Kotlin Android AccessibilityService. AGP 9.0.1 (built-in Kotlin, no separate plugin), Gradle wrapper 9.2.1, JDK 17, min/target/compile SDK 24/36/36, namespace `io.github.owenpkent.openmouse`. Deps via `gradle/libs.versions.toml`.
-- `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`, `update/` (the GitHub Releases update check: pure `ReleaseFeed` and `LaunchCheck` + Android `UpdateChecker`/`UpdatePrompt`, gated on `BuildConfig.UPDATER_ENABLED`, which `-PopenmouseUpdater=false` turns off for F-Droid and Play).
+- `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`, `update/` (the GitHub Releases update check: pure `ReleaseFeed` and `LaunchCheck` + Android `UpdateChecker`/`UpdatePrompt`, gated on `BuildConfig.UPDATER_ENABLED`, which `-PopenmouseUpdater=false` turns off for F-Droid and Play). Its permissions and `FileProvider` live in `app/src/updater/AndroidManifest.xml`, merged only when the updater is compiled in; never add them to the main manifest.
 - `app/src/test/java/.../{click,menu,update}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`, `ReleaseFeedTest`, `LaunchCheckTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
 - `docs/ARCHITECTURE.md` - read first. `platform/` + `Android.bp` - AOSP/LineageOS system-app build (not day-to-day, unvalidated). `fastlane/` - F-Droid/Play metadata.
 

@@ -26,12 +26,12 @@ Do not upload a bundle built without `-PopenmouseUpdater=false`. The default
 a new APK; Play's Device and Network Abuse policy forbids an app from updating
 itself by any means other than Play's own update mechanism. With the flag the
 Updates section, the launch check and all network code are gone, and Play
-delivers updates.
-
-Known gap: the shared manifest still declares `INTERNET` and
-`REQUEST_INSTALL_PACKAGES` even in that build. Nothing uses them, but
-`REQUEST_INSTALL_PACKAGES` is a restricted permission on Play, so strip it from
-the Play build (or be ready to justify it in the Console) before submitting.
+delivers updates. The flag also leaves out the updater's manifest
+(`app/src/updater/`), so the Play build declares neither `INTERNET` nor the
+restricted `REQUEST_INSTALL_PACKAGES` permission, and has no `FileProvider`.
+To check before uploading, build an APK the same way
+(`./gradlew -PopenmouseUpdater=false assembleRelease`): `aapt2 dump permissions`
+on it should list neither.
 
 ## The gate: AccessibilityService policy
 
