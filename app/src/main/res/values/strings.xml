@@ -65,5 +65,12 @@
         <item>Orange</item>
     </string-array>
 
-    <!-- Gesture menu labels -->
+    <!-- Action badge beside the cross-hair: the current mode, named in words
+         because the dock itself draws symbols. -->
+    <string name="badge_double_tap">Double tap</string>
+    <string name="badge_long_press">Hold</string>
+    <string name="badge_drag">Drag</string>
+    <string name="badge_swipe">Swipe</string>
+    <string name="badge_scroll_up">Scroll ↑</string>
+    <string name="badge_scroll_down">Scroll ↓</string>
 </resources>

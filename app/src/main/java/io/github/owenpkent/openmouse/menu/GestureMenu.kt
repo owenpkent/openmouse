@@ -42,7 +42,7 @@ enum class GestureAction {
  * drives everything through [hitTest]. Every entry is a drawn symbol rather
  * than a word, so the cells stay small and nothing needs translating.
  */
-class GestureMenu(context: Context) {
+class GestureMenu(private val context: Context) {
 
     var expanded = false
         private set
@@ -131,11 +131,23 @@ class GestureMenu(context: Context) {
     }
 
     /**
-     * The label the menu shows for [action], for the badge beside the cross-hair
-     * (so the badge and the menu always agree on the name of a mode). Null for
-     * the toggle, which has no label.
+     * The name of mode [action] for the badge beside the cross-hair. The dock
+     * draws symbols, so the badge is the one place a mode is named in words.
+     * Null for anything that is not a sticky mode (a plain tap shows no badge;
+     * navigation, pause and the toggle act at once and never become the mode).
      */
-    fun labelFor(action: GestureAction): String? = items.firstOrNull { it.action == action }?.label
+    fun labelFor(action: GestureAction): String? {
+        val res = when (action) {
+            GestureAction.DOUBLE_TAP -> R.string.badge_double_tap
+            GestureAction.LONG_PRESS -> R.string.badge_long_press
+            GestureAction.DRAG -> R.string.badge_drag
+            GestureAction.SWIPE -> R.string.badge_swipe
+            GestureAction.SCROLL_UP -> R.string.badge_scroll_up
+            GestureAction.SCROLL_DOWN -> R.string.badge_scroll_down
+            else -> return null
+        }
+        return context.getString(res)
+    }
 
     /** Which menu entry (if any) sits under [x], [y]. */
     fun hitTest(x: Float, y: Float): GestureAction? {

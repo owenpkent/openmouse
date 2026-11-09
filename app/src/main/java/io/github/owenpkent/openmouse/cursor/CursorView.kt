@@ -185,7 +185,7 @@ class CursorView(context: Context) : View(context) {
 
     /**
      * Show [text] in the action badge beside the cross-hair, or hide the badge
-     * (null). The service passes the menu label of the current mode, and null
+     * (null). The service passes the name of the current mode, and null
      * for a plain tap.
      */
     fun setBadge(text: String?) {
