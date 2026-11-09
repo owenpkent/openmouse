@@ -7,21 +7,7 @@ tagged release.
 
 ## [Unreleased]
 
-### Changed
-
-- The gesture menu is now a dock flush with the screen edge, made of 48 dp
-  square cells showing drawn symbols instead of words (tap, double tap, hold,
-  drag, swipe, scroll, Android's back / home / recents glyphs, a bell, a gear,
-  pause / play). Smaller cells, nothing to translate, and the same adaptive
-  widening on short screens. Collapsed, only a slim handle stays on the edge;
-  the pointer stops at the screen edge, so the handle is easy to reach.
-- Entering a menu cell while dwell clicking is locked (after a menu choice, a
-  physical click, or the dock re-laying out under a still pointer) no longer
-  arms the cell by itself: the pointer must first clear the movement tolerance
-  from where it locked. A tremor across a cell edge cannot select the
-  neighbour, and opening the dock from its tall handle cannot select a cell
-  that lands 1 px from the pointer. Entering a cell during a running countdown
-  still arms it at once.
+## [0.2.0] - 2026-11-09
 
 ### Added
 
@@ -117,6 +103,19 @@ tagged release.
 
 ### Changed
 
+- The gesture menu is now a dock flush with the screen edge, made of 48 dp
+  square cells showing drawn symbols instead of words (tap, double tap, hold,
+  drag, swipe, scroll, Android's back / home / recents glyphs, a bell, a gear,
+  pause / play). Smaller cells, nothing to translate, and the same adaptive
+  widening on short screens. Collapsed, only a slim handle stays on the edge;
+  the pointer stops at the screen edge, so the handle is easy to reach.
+- Entering a menu cell while dwell clicking is locked (after a menu choice, a
+  physical click, or the dock re-laying out under a still pointer) no longer
+  arms the cell by itself: the pointer must first clear the movement tolerance
+  from where it locked. A tremor across a cell edge cannot select the
+  neighbour, and opening the dock from its tall handle cannot select a cell
+  that lands 1 px from the pointer. Entering a cell during a running countdown
+  still arms it at once.
 - The dwell ticker runs only while a countdown is in progress. Locked after a
   click, paused over the app, or with a mouse button held, the service no
   longer wakes up every 16 ms for nothing; a pointer move or a scroll re-arm

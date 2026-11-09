@@ -23,8 +23,8 @@ when it is merged to `main`, and note the PR.
 Order: A1 to A3 first (cheap, and they protect everything after), then A7, A9
 and A10, then the rest.
 
-- [ ] **A1. Harden CI.** Pin every action by commit SHA with `persist-credentials: false`, add concurrency groups, build `assembleRelease` unsigned so a release-variant break fails in CI, lint the release variant too, and add an aggregate `Tests` job for branch protection to require.
-- [ ] **A2. Pre-push hook.** `.githooks/pre-push` runs the unit tests and lint, the same as the CI fast job. Enabled by `./gradlew installGitHooks` (or `git config core.hooksPath .githooks`); never bypassed with `--no-verify`.
+- [x] **A1. Harden CI.** Pin every action by commit SHA with `persist-credentials: false`, add concurrency groups, build `assembleRelease` unsigned so a release-variant break fails in CI, lint the release variant too, and add an aggregate `Tests` job for branch protection to require. (v0.2.0: #11)
+- [x] **A2. Pre-push hook.** `.githooks/pre-push` runs the unit tests and lint, the same as the CI fast job. Enabled by `./gradlew installGitHooks` (or `git config core.hooksPath .githooks`); never bypassed with `--no-verify`. (v0.2.0: #11)
 - [ ] **A3. Review gate.** `review-gate.yml` sets a `Reviewed` commit status from the reviews on the head commit. Branch protection on `main` requires `Tests`, `Reviewed`, and the gate's own `Set the Reviewed status` check, admins included. Turn protection on only after A1 and A3 have merged, or the first PR cannot merge:
 
   ```sh
@@ -45,26 +45,28 @@ and A10, then the rest.
   }
   ```
 
-- [ ] **A4. Dependency and code scanning.** Dependabot for `gradle` and `github-actions`, weekly, minor and patch grouped. CodeQL for Kotlin with a Gradle build step. Gradle dependency locking (`gradle.lockfile`) so OSV-Scanner has something to read, then the Polaris OSV diff gate, weekly full scan, and self-test.
-- [ ] **A5. Nightly fuzz that reports.** Cache the evolved corpus between nights, and add a report job (read-only fuzz jobs, `issues: write` on the reporter only) that opens or comments on `Fuzz crash: <target>` with the input in base64 and the replay command.
+  v0.2.0 brings `review-gate.yml` (#11); tick this once protection is on.
+
+- [x] **A4. Dependency and code scanning.** Dependabot for `gradle` and `github-actions`, weekly, minor and patch grouped. CodeQL for Kotlin with a Gradle build step. Gradle dependency locking (`gradle.lockfile`) so OSV-Scanner has something to read, then the Polaris OSV diff gate, weekly full scan, and self-test. (v0.2.0: #16)
+- [x] **A5. Nightly fuzz that reports.** Cache the evolved corpus between nights, and add a report job (read-only fuzz jobs, `issues: write` on the reporter only) that opens or comments on `Fuzz crash: <target>` with the input in base64 and the replay command. (v0.2.0: #17)
 - [ ] **A6. Coverage floor.** Kover over the pure packages (`click`, `menu`, `gesture`) with line and branch floors a couple of points under measured. Raise them as coverage rises, never lower them to get green.
-- [ ] **A7. Emulator tests in CI.** Automate the manual smoke test from CONTRIBUTING with `android-emulator-runner` and KVM: the service enables, the overlay is attached and `NOT_TOUCHABLE` on API 34+, a screenshot shows the cross-hair. Add a recorder Activity so instrumented tests assert what `dispatchGesture` delivered for every `GestureAction` (the Dwell Click recorder-window idea, which sidesteps the "no mouse on the emulator" limit).
+- [x] **A7. Emulator tests in CI.** Automate the manual smoke test from CONTRIBUTING with `android-emulator-runner` and KVM: the service enables, the overlay is attached and `NOT_TOUCHABLE` on API 34+, a screenshot shows the cross-hair. Add a recorder Activity so instrumented tests assert what `dispatchGesture` delivered for every `GestureAction` (the Dwell Click recorder-window idea, which sidesteps the "no mouse on the emulator" limit). (v0.2.0: #22, #24)
 - [ ] **A8. Invariants as tests.** One `InvariantsTest` stating the CLAUDE.md safety rules by name: paused never fires on the app, every injecting action goes through `runGesture`, the touchscreen is never left locked out, pure classes never throw. A change that breaks one fails by name.
-- [ ] **A9. Release machinery.** Signed `vX.Y.Z` tags against a `release-signers` file with a verify script; a `publish-release.ps1` that builds, signs, and attaches the APK to a GitHub Release; a version-consistency test over `versionName`, `versionCode`, CHANGELOG and the fastlane changelog; a release checklist in RELEASING.md.
-- [ ] **A10. In-app updater.** Sideload is the only live channel today. Poll GitHub Releases, download the APK, verify its signing certificate matches the installed one, hand it to the installer. Off by default in F-Droid builds (a build flavor or a `BuildConfig` flag).
-- [ ] **A11. Docs.** TROUBLESHOOTING.md and SIGNING.md; a gates table in CONTRIBUTING; "It's working if" and "Who it is not for" in the README; SECURITY.md moved to GitHub private vulnerability reporting with a short security model; a defaults table with provenance in ARCHITECTURE; a dated record of each emulator suite run.
+- [x] **A9. Release machinery.** Signed `vX.Y.Z` tags against a `release-signers` file with a verify script; a `publish-release.ps1` that builds, signs, and attaches the APK to a GitHub Release; a version-consistency test over `versionName`, `versionCode`, CHANGELOG and the fastlane changelog; a release checklist in RELEASING.md. (v0.2.0: #18, #26)
+- [x] **A10. In-app updater.** Sideload is the only live channel today. Poll GitHub Releases, download the APK, verify its signing certificate matches the installed one, hand it to the installer. Off by default in F-Droid builds (a build flavor or a `BuildConfig` flag). (v0.2.0: #21, #25)
+- [ ] **A11. Docs.** TROUBLESHOOTING.md and SIGNING.md; a gates table in CONTRIBUTING; "It's working if" and "Who it is not for" in the README; SECURITY.md moved to GitHub private vulnerability reporting with a short security model; a defaults table with provenance in ARCHITECTURE; a dated record of each emulator suite run. (v0.2.0: TROUBLESHOOTING.md and SIGNING.md in #26, the gates table in #11; the rest is open)
 
 ## Track B: Dwell Click behaviour parity
 
 Each item is one small PR, like the `dwell-click/*` branches in the PowerToys
 fork. Order: B1 to B4 first, then the settings surface, then the new actions.
 
-- [ ] **B1. Wheel turn cancels a running countdown** and locks until the pointer moves: the content under a resting pointer changed, so the countdown is no longer aimed at what the user chose.
-- [ ] **B2. Scroll repeat interval.** The first notch at a rest point waits the full dwell time (that one is the decision); later notches land every repeat interval (400 ms default, settings slider). Movement or any lock goes back to the full dwell.
-- [ ] **B3. Held button suppresses dwelling** for the whole hold, not only at the press; release locks until the pointer moves.
-- [ ] **B4. Idle polling.** Stop the 16 ms tick while the machine is locked or paused and poll only while a countdown runs. Battery matters more on Android than on Windows.
-- [ ] **B5. Countdown ring show delay.** Hide the ring for the first fifth of the dwell, at most 250 ms, so it does not trail a moving pointer. Only the feedback waits; the click does not.
-- [ ] **B6. Action badge** beside the cross-hair whenever the current mode is not a plain tap.
+- [x] **B1. Wheel turn cancels a running countdown** and locks until the pointer moves: the content under a resting pointer changed, so the countdown is no longer aimed at what the user chose. (v0.2.0: #12)
+- [x] **B2. Scroll repeat interval.** The first notch at a rest point waits the full dwell time (that one is the decision); later notches land every repeat interval (400 ms default, settings slider). Movement or any lock goes back to the full dwell. (v0.2.0: #13)
+- [x] **B3. Held button suppresses dwelling** for the whole hold, not only at the press; release locks until the pointer moves. (v0.2.0: #14)
+- [x] **B4. Idle polling.** Stop the 16 ms tick while the machine is locked or paused and poll only while a countdown runs. Battery matters more on Android than on Windows. (v0.2.0: #15)
+- [x] **B5. Countdown ring show delay.** Hide the ring for the first fifth of the dwell, at most 250 ms, so it does not trail a moving pointer. Only the feedback waits; the click does not. (v0.2.0: #19)
+- [x] **B6. Action badge** beside the cross-hair whenever the current mode is not a plain tap. (v0.2.0: #20)
 - [ ] **B7. Blocked-gesture feedback.** Use the `dispatchGesture` cancelled callback to flash a slashed circle and lock, instead of silently retrying.
 - [ ] **B8. Settings surface.** Default action and a revert-to-default toggle; optional click sound; ring color; menu size (small, medium, large); per-entry visibility; docking to the top and bottom edges and a position along the edge; Ease Mouse's floating "big menu" style. Widen the dwell range toward 200 ms to 5 s.
 - [ ] **B9. Actions.** Scroll left and right; pinch-zoom in and out.
