@@ -191,6 +191,11 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile("scripts/publish-release.ps1", [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors) { $errors | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
             Write-Host "publish-release.ps1 parses"'
+          # Runs the script end to end with stub gh and apksigner. PowerShell 7
+          # here does not reproduce Windows PowerShell 5.1's NativeCommandError
+          # on redirected stderr; run the fixture under powershell.exe locally
+          # after changing the script (docs/RELEASING.md).
+          pwsh -NoProfile -File scripts/tests/publish-release.fixture.ps1
           sh scripts/verify-release-tag.sh bad && exit 1 || [ $? -eq 2 ]
           git -c user.name=ci -c user.email=ci@invalid -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
           if sh scripts/verify-release-tag.sh v9.9.9; then echo "::error::an unsigned tag verified"; exit 1; fi

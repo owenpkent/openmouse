@@ -140,8 +140,15 @@ for every merged pull request, because each needs the owner's signature.
 
    ```powershell
    git checkout v0.2.0
-   pwsh -File scripts\publish-release.ps1          # add -Draft to read it over first
+   powershell -File scripts\publish-release.ps1    # add -Draft to read it over first
    ```
+
+   Windows PowerShell 5.1 (`powershell -File`, built into Windows) and
+   PowerShell 7 (`pwsh -File`) both work. `scripts/tests/publish-release.fixture.ps1`
+   runs the script end to end with stub `gh` and `apksigner` in a throwaway
+   repository (nothing is built, signed or published); CI runs it under
+   PowerShell 7, so after changing the script also run it under the one you
+   publish with: `powershell -NoProfile -File scripts\tests\publish-release.fixture.ps1`.
 
    This is the default build, updater included. The Play AAB must instead be
    built with `-PopenmouseUpdater=false` (see [`docs/play/`](play/README.md)).
