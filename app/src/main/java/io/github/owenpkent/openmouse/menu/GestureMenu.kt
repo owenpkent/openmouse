@@ -23,7 +23,7 @@ enum class GestureAction {
 
     /**
      * Modes that repeat while the pointer keeps resting (one scroll notch per
-     * dwell period), rather than locking until it moves.
+     * repeat interval after a first full dwell), rather than locking until it moves.
      */
     val isRepeating: Boolean get() = this == SCROLL_UP || this == SCROLL_DOWN
 }
@@ -126,6 +126,13 @@ class GestureMenu(context: Context) {
         dockRight = value
         geometry.layout(lastWidth, lastHeight, expanded, dockRight)
     }
+
+    /**
+     * The label the menu shows for [action], for the badge beside the cross-hair
+     * (so the badge and the menu always agree on the name of a mode). Null for
+     * the toggle, which has no label.
+     */
+    fun labelFor(action: GestureAction): String? = items.firstOrNull { it.action == action }?.label
 
     /** Which menu entry (if any) sits under [x], [y]. */
     fun hitTest(x: Float, y: Float): GestureAction? {

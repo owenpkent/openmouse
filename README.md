@@ -27,6 +27,11 @@ with or endorsed by Ease Apps.
 - **F-Droid** and **Google Play**: planned; the metadata and submission guides are
   ready (see [docs/RELEASING.md](docs/RELEASING.md)).
 
+Once installed, OpenMouse can check GitHub Releases for a newer version from
+Settings > Updates (off by default: press **Check for updates now**, or turn on
+the launch check). It only installs an APK signed with the same key as the copy
+already on the device, and the system installer asks before anything changes.
+
 Then open OpenMouse, enable **OpenMouse cursor** in Accessibility settings, and
 plug in a mouse (details under [Enabling](#enabling-openmouse-on-a-device)).
 
@@ -84,7 +89,8 @@ two input-capture paths and how injected gestures reach the app below.
 - Scroll wheel scrolls the content under the cursor
 - On-screen gesture menu (collapsible grid, left or right edge, widens on short
   screens so every entry stays reachable)
-- Tap modes: single tap, double-tap, long-press
+- Tap modes: single tap, double-tap, long-press. A badge beside the cross-hair
+  names the active mode whenever it is not a plain tap
 - Drag and swipe: two-point gestures (click a start point, then an end point)
 - Scroll up / down at the cursor
 - Navigation from the menu: Back, Home, Recent, Notifications, Quick Settings
@@ -92,12 +98,14 @@ two input-capture paths and how injected gestures reach the app below.
   cell does not restart or repeat it, only leaving and coming back does
 - Pause / Resume from the menu: stops dwell clicking on the app while the menu
   (and physical clicks) keep working
-- Scroll modes repeat while the pointer rests: one notch per dwell period
+- Scroll modes repeat while the pointer rests: the first notch after a full
+  dwell, then one every repeat interval
 - Settings screen (applied live): dwell time, movement tolerance, re-arm distance
-  after a click, cursor size, cursor color, menu side, and a dwell-click on/off
-  toggle
+  after a click, scroll repeat interval, cursor size, cursor color, menu side,
+  and a dwell-click on/off toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
+- Optional update check against GitHub Releases (off by default; Settings)
 
 **Roadmap** (mirrors the original's feature set)
 
@@ -152,7 +160,9 @@ app/src/main/
 │   ├── settings/OpenMouseSettings.kt   SharedPreferences-backed settings
 │   ├── gesture/GestureDispatcher.kt    builds injections, dispatchGesture() wrapper
 │   ├── gesture/PassthroughGate.kt      pure legacy click-through bookkeeping (unit tested)
-│   └── gesture/SwallowedGestureTracker.kt  pure swallowed-gesture detection (unit tested)
+│   ├── gesture/SwallowedGestureTracker.kt  pure swallowed-gesture detection (unit tested)
+│   ├── update/ReleaseFeed.kt           pure release parsing + URL allow-list (unit tested)
+│   └── update/UpdateChecker.kt         GitHub fetch, signature check, installer hand-off
 ├── res/xml/accessibility_service_config.xml
 └── AndroidManifest.xml
 
@@ -161,6 +171,7 @@ app/src/test/java/io/github/owenpkent/openmouse/   JVM unit tests (JUnit 5)
 ├── menu/MenuGeometryTest.kt
 ├── gesture/PassthroughGateTest.kt
 ├── gesture/SwallowedGestureTrackerTest.kt
+├── update/ReleaseFeedTest.kt
 └── fuzz/                            Jazzer fuzz targets (run nightly)
     ├── DwellMachineFuzzTest.kt
     ├── MenuGeometryFuzzTest.kt

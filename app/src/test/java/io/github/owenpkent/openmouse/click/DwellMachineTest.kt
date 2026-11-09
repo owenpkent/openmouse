@@ -130,6 +130,79 @@ class DwellMachineTest {
     }
 
     @Nested
+    inner class CountdownRing {
+
+        @Test
+        fun ringWaitsAFifthOfAShortDwell() {
+            val m = machine() // 100 ms dwell: the ring waits 20 ms
+            arm(m)
+            val early = m.poll(19L)
+            assertEquals(0.19f, early.progress, EPS) // the countdown runs
+            assertEquals(0f, early.ringProgress, EPS) // but the ring is hidden
+            val shown = m.poll(20L)
+            assertEquals(0.2f, shown.ringProgress, EPS) // then shows at its real fill
+            assertEquals(shown.progress, shown.ringProgress, EPS)
+        }
+
+        @Test
+        fun ringWaitsAtMost250msOfALongDwell() {
+            val m = DwellMachine(dwellTimeMs = 10_000L, moveThresholdPx = 10f)
+            arm(m)
+            assertEquals(0f, m.poll(249L).ringProgress, EPS)
+            assertEquals(0.025f, m.poll(250L).ringProgress, EPS)
+            assertEquals(250L, DwellMachine.ringDelayMs(10_000L))
+        }
+
+        @Test
+        fun theClickDoesNotWait() {
+            // Only the feedback is delayed: the dwell fires exactly when it
+            // always did, delay or not.
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+
+            val tiny = DwellMachine(dwellTimeMs = 1L, moveThresholdPx = 10f)
+            arm(tiny)
+            assertEquals(0L, DwellMachine.ringDelayMs(1L))
+            assertTrue(tiny.poll(1L).clicked)
+        }
+
+        @Test
+        fun ringIsHiddenWhileLockedAndOnTheFiringPoll() {
+            val m = machine()
+            m.reset(0L)
+            assertEquals(0f, m.poll(1000L).ringProgress, EPS) // locked: nothing to show
+            arm(m, nowMs = 1000L)
+            val fired = m.poll(1100L)
+            assertTrue(fired.clicked)
+            assertEquals(0f, fired.ringProgress, EPS) // the ring clears with the click
+        }
+
+        @Test
+        fun aRepeatingScrollHasItsOwnShorterDelay() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 40L)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L) // a 40 ms countdown: the ring waits 8 ms
+            assertEquals(0f, m.poll(107L).ringProgress, EPS)
+            assertEquals(0.2f, m.poll(108L).ringProgress, EPS)
+        }
+
+        @Test
+        fun degenerateDwellTimesStillShowTheRing() {
+            // Under 5 ms the fifth rounds to zero, so the ring shows as soon as
+            // there is any progress, and a nonsense period never hides it forever.
+            assertEquals(0L, DwellMachine.ringDelayMs(4L))
+            assertEquals(0L, DwellMachine.ringDelayMs(0L))
+            assertEquals(0L, DwellMachine.ringDelayMs(-1000L))
+            assertEquals(250L, DwellMachine.ringDelayMs(Long.MAX_VALUE))
+            val m = DwellMachine(dwellTimeMs = 4L, moveThresholdPx = 10f)
+            arm(m)
+            assertEquals(0.25f, m.poll(1L).ringProgress, EPS)
+        }
+    }
+
+    @Nested
     inner class DegenerateInputs {
 
         @Test
@@ -213,6 +286,25 @@ class DwellMachineTest {
 
             m.onMove(140f, 140f, 5000L) // ~56 px from the lock anchor: unlocks
             assertTrue(m.poll(5100L).clicked)
+        }
+
+        @Test
+        fun aWheelTurnCancelsTheRunningCountdown() {
+            // The content scrolled under the resting pointer, so the countdown
+            // is no longer aimed at what the user chose. The service locks with
+            // the ordinary tolerance (not the post-action distance): the user
+            // did not click, so recovering must not need an exaggerated move.
+            val m = machine()
+            arm(m)
+            m.poll(90L) // almost there
+
+            m.lockUntilMove() // the wheel turned
+            assertFalse(m.poll(100L).clicked)
+            assertEquals(0f, m.poll(100L).progress, EPS)
+            assertFalse(m.poll(100_000L).clicked)
+
+            m.onMove(111f, 100f, 100_000L) // 11 px: the ordinary tolerance re-arms
+            assertTrue(m.poll(100_100L).clicked)
         }
 
         @Test
@@ -356,7 +448,8 @@ class DwellMachineTest {
         @Test
         fun rearmInPlaceFiresAgainWithoutMovement() {
             // Scroll is the one mode that does not lock after firing: the caller
-            // re-arms in place and another notch lands each dwell period.
+            // re-arms in place and another notch lands each repeat interval (the dwell
+            // time here, since this machine has no separate interval).
             val m = machine()
             arm(m)
             assertTrue(m.poll(100L).clicked)
@@ -390,6 +483,283 @@ class DwellMachineTest {
             m.setPaused(true)
             m.rearmInPlace(100L)
             assertFalse(m.poll(1000L).clicked)
+        }
+    }
+
+    @Nested
+    inner class RepeatInterval {
+
+        // 100 ms dwell with a 40 ms repeat interval; the shipping defaults are
+        // 1000 ms and 400 ms.
+        private fun machine() = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 40L)
+
+        @Test
+        fun firstNotchWaitsTheDwellTimeAndLaterNotchesTheRepeatInterval() {
+            val m = machine()
+            arm(m)
+            assertFalse(m.poll(99L).clicked)
+            assertTrue(m.poll(100L).clicked) // the decision: a full dwell
+            m.rearmInPlace(100L)
+            assertFalse(m.poll(139L).clicked)
+            assertTrue(m.poll(140L).clicked) // then one notch per interval
+            m.rearmInPlace(140L)
+            assertEquals(0.5f, m.poll(160L).progress, EPS) // progress is against the interval
+            assertTrue(m.poll(180L).clicked)
+        }
+
+        @Test
+        fun movementGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.onMove(300f, 300f, 110L) // a new spot is a new decision
+            assertFalse(m.poll(150L).clicked) // 40 ms is no longer enough
+            assertFalse(m.poll(209L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun aLockGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.lockUntilMove() // a physical click, a menu choice, a wheel turn
+            m.onMove(300f, 300f, 110L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun pauseGoesBackToTheFullDwellTime() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            m.setPaused(true)
+            m.setPaused(false)
+            m.onMove(300f, 300f, 110L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(210L).clicked)
+        }
+
+        @Test
+        fun clicksIgnoreTheInterval() {
+            // Only a re-arm in place uses the interval. A click locks, and the
+            // movement that re-arms it starts a full dwell.
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.onMove(300f, 300f, 100L)
+            assertFalse(m.poll(140L).clicked)
+            assertTrue(m.poll(200L).clicked)
+        }
+
+        @Test
+        fun aZeroIntervalClampsToOneMillisecond() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f, repeatIntervalMs = 0L)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            val same = m.poll(100L) // no elapsed time: no notch, and no NaN
+            assertFalse(same.clicked)
+            assertEquals(0f, same.progress, EPS)
+            assertTrue(m.poll(101L).clicked)
+        }
+
+        @Test
+        fun withoutASeparateIntervalTheRepeatUsesTheDwellTime() {
+            val m = DwellMachine(dwellTimeMs = 100L, moveThresholdPx = 10f)
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+            assertFalse(m.poll(150L).clicked)
+            assertTrue(m.poll(200L).clicked)
+        }
+
+        @Test
+        fun configureChangesTheIntervalLive() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.configure(dwellTimeMs = 100L, moveThresholdPx = 10f, postActionThresholdPx = 10f, repeatIntervalMs = 20L)
+            m.lockUntilMove() // what DwellClicker.configure does
+            m.onMove(300f, 300f, 100L)
+            assertTrue(m.poll(200L).clicked)
+            m.rearmInPlace(200L)
+            assertFalse(m.poll(219L).clicked)
+            assertTrue(m.poll(220L).clicked)
+        }
+    }
+
+    @Nested
+    inner class ExternalButtonHold {
+
+        @Test
+        fun aHeldButtonSuppressesDwellingHoweverThePointerMoves() {
+            val m = machine()
+            arm(m)
+            m.poll(50L) // countdown half spent
+
+            assertTrue(m.setExternalButtonHeld(true)) // the user's own press
+            assertFalse(m.poll(100L).clicked)
+            m.onMove(300f, 300f, 100L) // the user drags
+            assertFalse(m.poll(1000L).clicked)
+            assertEquals(0f, m.poll(1000L).progress, EPS)
+            m.onMove(500f, 500f, 1000L) // and keeps dragging
+            assertFalse(m.poll(10_000L).clicked)
+            assertTrue(m.isExternalButtonHeld)
+        }
+
+        @Test
+        fun lettingGoLocksUntilThePointerMoves() {
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true)
+            m.onMove(300f, 300f, 10L)
+
+            assertTrue(m.setExternalButtonHeld(false))
+            // The rest where the button came up is not a click.
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(305f, 300f, 10_000L) // 5 px: still parked
+            assertFalse(m.poll(20_000L).clicked)
+            m.onMove(320f, 300f, 20_000L) // 20 px: deliberate
+            assertTrue(m.poll(20_100L).clicked)
+        }
+
+        @Test
+        fun aRedundantCallDoesNotDisturbARunningCountdown() {
+            // The service reports the button state on every pointer event, so
+            // "still up" must be free of side effects.
+            val m = machine()
+            arm(m)
+            m.poll(50L)
+            assertFalse(m.setExternalButtonHeld(false))
+            assertEquals(0.75f, m.poll(75L).progress, EPS)
+            assertTrue(m.poll(100L).clicked)
+        }
+
+        @Test
+        fun aHoldStopsARepeatingScroll() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            m.rearmInPlace(100L)
+
+            m.setExternalButtonHeld(true)
+            assertFalse(m.poll(200L).clicked)
+            m.rearmInPlace(200L) // a re-arm asked for during the hold is refused
+            assertFalse(m.poll(300L).clicked)
+            m.setExternalButtonHeld(false)
+            assertFalse(m.poll(400L).clicked) // and the release locks until move
+        }
+
+        @Test
+        fun aHoldOnAMenuEntryDoesNotFireIt() {
+            val m = machine()
+            m.reset(0L)
+            m.setExternalButtonHeld(true)
+            m.onMove(100f, 100f, 0L, restKey = "cell")
+            assertFalse(m.poll(1000L).clicked)
+
+            m.setExternalButtonHeld(false)
+            assertFalse(m.poll(2000L).clicked) // parked on the entry: locked
+            m.onMove(100f, 100f, 2000L, restKey = "other") // entering another entry arms
+            assertTrue(m.poll(2100L).clicked)
+        }
+
+        @Test
+        fun aReleaseThatLandsOnAMenuEntryDoesNotArmIt() {
+            // The service feeds the release position while the machine still
+            // reads held, then the release, so the lock the release leaves
+            // anchors on the entry under the pointer. Reported the other way
+            // round, the release would lock on the old key and the move onto
+            // the new entry would arm it.
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true) // pressed on the app
+            m.onMove(300f, 300f, 10L, restKey = "back") // dragged onto Back, still held
+            m.setExternalButtonHeld(false) // let go on Back
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(301f, 300f, 10_000L, restKey = "back") // a tremor on the same entry
+            assertFalse(m.poll(20_000L).clicked)
+            m.onMove(300f, 300f, 20_000L, restKey = "home") // a different entry arms
+            assertTrue(m.poll(20_100L).clicked)
+        }
+    }
+
+    @Nested
+    inner class IdlePolling {
+
+        // DwellClicker polls only while isCountingDown is true, so these pin
+        // exactly when time alone can change something.
+
+        @Test
+        fun onlyAnArmedMachineIsCountingDown() {
+            val m = machine()
+            m.reset(0L)
+            assertFalse(m.isCountingDown) // starts locked
+            m.onMove(5f, 0f, 0L)
+            assertFalse(m.isCountingDown) // within tolerance: still locked
+            m.onMove(100f, 100f, 0L)
+            assertTrue(m.isCountingDown)
+            m.lockUntilMove()
+            assertFalse(m.isCountingDown)
+        }
+
+        @Test
+        fun aFiringPollStopsTheCountdownAndARearmRestartsIt() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            assertFalse(m.isCountingDown) // locked after the click
+            m.rearmInPlace(100L)
+            assertTrue(m.isCountingDown) // a repeating scroll keeps ticking
+        }
+
+        @Test
+        fun pauseOverTheAppIsNotCountingDownButAMenuEntryIs() {
+            val m = machine()
+            arm(m)
+            m.setPaused(true)
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L) // over the app: armed, but nothing can fire
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L, restKey = "cell") // Resume stays reachable
+            assertTrue(m.isCountingDown)
+        }
+
+        @Test
+        fun aHeldButtonIsNotCountingDown() {
+            val m = machine()
+            arm(m)
+            m.setExternalButtonHeld(true)
+            assertFalse(m.isCountingDown)
+            m.onMove(300f, 300f, 0L)
+            assertFalse(m.isCountingDown)
+            m.setExternalButtonHeld(false)
+            assertFalse(m.isCountingDown) // locked until move
+            m.onMove(400f, 400f, 0L)
+            assertTrue(m.isCountingDown)
+        }
+
+        @Test
+        fun whileIdlePollsChangeNothingHoweverFarApart() {
+            val m = machine()
+            arm(m)
+            assertTrue(m.poll(100L).clicked)
+            assertFalse(m.isCountingDown)
+            for (t in listOf(101L, 10_000L, Long.MAX_VALUE)) {
+                val p = m.poll(t)
+                assertFalse(p.clicked)
+                assertEquals(0f, p.progress, EPS)
+            }
+            assertFalse(m.isCountingDown)
+            // And the next move arms it as if no time had passed.
+            m.onMove(300f, 300f, Long.MAX_VALUE - 100L)
+            assertTrue(m.isCountingDown)
+            assertTrue(m.poll(Long.MAX_VALUE).clicked)
         }
     }
 

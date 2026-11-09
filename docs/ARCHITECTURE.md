@@ -19,6 +19,9 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `OpenMouseSettings` | Typed, range-clamped wrapper over SharedPreferences. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 | `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
+| `ReleaseFeed` | **Pure** GitHub release parsing, version comparison and URL allow-list (unit tested). |
+| `UpdateChecker` | Fetches the release feed and APK, checks the signing certificate, hands off to the installer. |
+| `UpdatePrompt` | The "new version" dialog shared by Settings and the launch check. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
 `DwellClicker`, and on a dwell becomes a `tap(x, y)` through `GestureDispatcher`.
@@ -72,7 +75,7 @@ edges, each guarded:
    leave the overlay stuck non-touchable and freeze the cursor). The bookkeeping
    is the pure `PassthroughGate`: the watchdog deadline belongs to the *oldest*
    outstanding gesture and later gestures never push it out, so a repeating
-   scroll (one notch per dwell period) cannot keep postponing recovery after a
+   scroll (one notch per repeat interval) cannot keep postponing recovery after a
    lost callback.
 
    The window manager applies the click-through change asynchronously, so a
@@ -113,15 +116,25 @@ drawn at the same point, so they coincide.
 ## The dwell state machine
 
 `DwellMachine` keeps an *anchor* (where the cursor came to rest, plus the menu
-entry under it, if any) and a monotonic rest start. `DwellClicker` polls it from
-a 16 ms ticker with `SystemClock.uptimeMillis()`, and the machine computes
+entry under it, if any) and a monotonic rest start. `DwellClicker` polls it
+every 16 ms with `SystemClock.uptimeMillis()`, but only while a countdown is
+running (`isCountingDown`: armed, no button held, not paused over the app); an
+idle machine, which is most of the time, costs no wake-ups, and every call that
+can arm it (a move, a re-arm in place) restarts the ticker. The machine computes
 `progress = elapsed / dwellTime`. The rules mirror the PowerToys Dwell Click
 engine, and every one of them is biased toward refusing to fire when intent is
 unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 
 - It starts **locked**, and re-locks after every click, after a physical click,
-  on pause, after any live settings change, and when the ticker restarts. A lock
-  is cleared only by deliberate pointer movement; no amount of elapsed time will.
+  after a wheel turn (the content under the resting pointer changed, so the
+  countdown is no longer aimed at what the user chose), on pause, after any live
+  settings change, and when the ticker restarts. A lock is cleared only by
+  deliberate pointer movement; no amount of elapsed time will.
+- **A held button suppresses dwelling.** The service reports the button state
+  on every pointer event (`buttonState != 0`), and while any button is down the
+  machine stays locked whatever the pointer does: a dwell must never cut short
+  the user's own drag or selection. Letting go locks until the pointer moves, so
+  the spot where the button came up is not clicked by the rest that follows.
 - **Two tolerances.** The movement tolerance is the jitter a running countdown
   survives; drift within it leaves the countdown alone, which is what lets a hand
   with a tremor complete a dwell at all. The re-arm distance is how far the
@@ -146,10 +159,19 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   service also refuses a dwell that reaches `handlePrimaryAction` over the app
   while paused, so a rest key that went stale between pointer events can never
   tap the app; physical clicks are unaffected.
+- **The ring waits, the click does not.** The countdown ring stays hidden for
+  the first fifth of a countdown, at most 250 ms (`Poll.ringProgress`). Once the
+  machine is armed every brief pause in ordinary movement starts a countdown,
+  and a ring drawn from the first poll trailed a pointer that had merely slowed
+  down. The dwell itself fires exactly when it always did.
 - **Scroll repeats in place.** After a scroll dwell the service re-arms the
-  machine at the same anchor instead of waiting for movement, so another notch
-  lands each dwell period while the pointer keeps resting. Moving away re-anchors
-  as usual.
+  machine at the same anchor instead of waiting for movement. Only the first
+  notch at a rest point waits the full dwell time, because that one is the
+  decision; the re-armed countdown runs for the scroll repeat interval (400 ms
+  by default, a setting), so another notch lands each interval while the
+  pointer keeps resting. One notch per dwell time, three lines a second at the
+  defaults, was too slow to read a page by. Moving away, or any lock, goes back
+  to the full dwell time.
 
 `SystemClock.uptimeMillis()` is used (not wall-clock) so the timing is immune to
 clock changes. Changing a setting live re-locks, so dragging the dwell slider
@@ -165,8 +187,13 @@ entry.
 The menu is **not a real View hierarchy**. `CursorView` owns every pointer
 event, so a separate touchable button strip underneath it would never receive
 hover. Instead the menu is pure data: `CursorView` draws it, and the service
-hit-tests the cursor position against it. Both the dwell timer and a physical
-left-click funnel into one method:
+hit-tests the cursor position against it. Whenever the current mode is not a
+plain tap, `CursorView` also draws an **action badge**, a pill with the mode's
+menu label, up and to the left of the cross-hair (flipping to the other side
+near an edge; the pure `BadgePlacement` decides where), so a sticky scroll or a
+drag waiting for its end point is visible where the user is looking, not only
+on the menu at the screen edge. Both the dwell timer and a physical left-click
+funnel into one method:
 
 ```
 handlePrimaryAction(x, y, fromDwell):
@@ -214,7 +241,7 @@ After it runs, a mode either reverts to `TAP` (one-shot) or stays selected
   back to tapping.
 - **Sticky**: tap, scroll-up, scroll-down. Scrolling is repeatable, so it stays
   active; a scroll dwell also re-arms in place, so holding still keeps
-  scrolling one notch per dwell period.
+  scrolling one notch per repeat interval after the first full dwell.
 
 The Pause entry is neither: it toggles dwell clicking on the app on and off,
 reads "Resume" while paused, and stays reachable by dwell because the machine
@@ -297,6 +324,50 @@ Because the settings screen and the service run in the same process, they share
 one SharedPreferences instance, so the listener fires on the main thread and the
 view updates are safe. The result is that tuning a slider moves the cursor on
 screen immediately.
+
+## Updates
+
+Sideloading from GitHub Releases is the only live channel, so the app can look
+for its own updates there. This is the **only code in OpenMouse that touches
+the network**, and it is built to stay narrow:
+
+- **Opt-in.** `UpdateChecker.check` runs when the user presses "Check for
+  updates now" in Settings, or at launch if `updateCheckOnLaunch` is on (default
+  off, once per process). There is no scheduled job and no background service.
+- **Two hosts.** The feed is `GET api.github.com/repos/owenpkent/openmouse/
+  releases/latest` with an `Accept: application/vnd.github+json` header and a
+  `OpenMouse/<version>` user agent (GitHub requires one); nothing else is sent.
+  The APK may only be fetched from
+  `https://github.com/owenpkent/openmouse/releases/download/`
+  (`ReleaseFeed.isAllowedDownloadUrl`). Redirects are followed by hand, at most
+  five, https only, and each hop must land on `github.com` or a
+  `*.githubusercontent.com` host (`isAllowedRedirectHost`); the platform's
+  automatic following would go anywhere the server said.
+- **Caps.** The feed body is capped at 1 MiB and the APK at 100 MiB; when the
+  release lists the asset size, the download must match it exactly. The file
+  lands in `cache/updates/` and is exposed to the installer through a
+  `FileProvider` scoped to that one folder (`res/xml/file_paths.xml`).
+- **Same key or nothing.** Before the installer sees the file,
+  `signatureMatches` reads the archive's signing certificates
+  (`GET_SIGNING_CERTIFICATES` on API 28+, `GET_SIGNATURES` before) and requires
+  the set to equal the installed app's, and the package name to be ours. A
+  mismatch deletes the file and tells the user; it is never offered to the
+  install flow. The system installer then asks the user itself, and on API 26+
+  the app first sends them to grant "install unknown apps" if it has not been.
+- **Compile-out.** `BuildConfig.UPDATER_ENABLED` comes from the Gradle property
+  `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
+  Settings section and skips the launch check; the F-Droid recipe passes it,
+  because F-Droid signs with its own key and ships updates itself.
+- **No retained state.** Every callback checks that the activity that asked
+  for it is still alive (`UpdatePrompt.shouldDeliver`: neither finishing nor
+  destroyed) and otherwise drops the result. Rotating or leaving Settings
+  mid-download therefore never shows a dialog on, or launches the installer
+  from, a screen that is gone; the file stays in the cache and the next check
+  offers it again.
+
+The decisions (what counts as a release, which version is newer, which URLs
+are allowed) live in the pure `ReleaseFeed` and are unit-tested; `UpdateChecker`
+is the Android wrapper around sockets, `PackageManager` and intents.
 
 ## Coordinate space
 

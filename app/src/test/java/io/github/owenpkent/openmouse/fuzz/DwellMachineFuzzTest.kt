@@ -27,7 +27,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
  * - a keyed target the machine locked on (by firing or by an explicit lock)
  *   never fires again while every move since has kept that key;
  * - while paused, a rest over the app (null key) never fires;
- * - progress never decreases while the pointer rests and time moves forward.
+ * - while a mouse button is held, nothing fires and no progress is reported,
+ *   however the pointer moves;
+ * - progress never decreases while the pointer rests and time moves forward;
+ * - a poll taken while `isCountingDown` is false changes nothing (DwellClicker
+ *   stops its ticker on that flag), and a click always leaves it false;
+ * - the ring progress is either hidden (0) or exactly the countdown progress.
  *
  * Without `JAZZER_FUZZ=1` in the environment this only replays the seed corpus
  * (and an empty input) as an ordinary JUnit test. The nightly workflow runs it
@@ -41,6 +46,7 @@ class DwellMachineFuzzTest {
             dwellTimeMs = data.consumeLong(),
             moveThresholdPx = data.consumeFloat(),
             postActionThresholdPx = data.consumeFloat(),
+            repeatIntervalMs = data.consumeLong(),
         )
         var now = 0L
         machine.reset(now)
@@ -50,6 +56,7 @@ class DwellMachineFuzzTest {
         var lastY = 0f
         var lastKey: Any? = null
         var paused = false
+        var held = false // a mouse button is held, as reported to the machine
         var clickedThisRest = false // a click happened with no onMove/rearm since
         // The keyed target the machine last locked on (by click or lock), while
         // every move since has kept that key: it must not fire again.
@@ -86,7 +93,7 @@ class DwellMachineFuzzTest {
                         else -> "c"
                     }
                     machine.onMove(lastX, lastY, now, lastKey)
-                    armedSinceLock = true
+                    if (!held) armedSinceLock = true // a move under a held button arms nothing
                     clickedThisRest = false
                     haveLastPoll = false
                     if (lastKey != lockedKey) parkedOnLockedKey = false
@@ -115,7 +122,7 @@ class DwellMachineFuzzTest {
 
                 7 -> {
                     // Mirrors DwellClicker.configure: new values, then lock.
-                    machine.configure(data.consumeLong(), data.consumeFloat(), data.consumeFloat())
+                    machine.configure(data.consumeLong(), data.consumeFloat(), data.consumeFloat(), data.consumeLong())
                     machine.lockUntilMove()
                     armedSinceLock = false
                     haveLastPoll = false
@@ -135,19 +142,49 @@ class DwellMachineFuzzTest {
                     }
                 }
 
+                10 -> {
+                    val next = data.consumeBoolean()
+                    val changed = machine.setExternalButtonHeld(next)
+                    assertEquals(next != held, changed, "setExternalButtonHeld reported the wrong change")
+                    assertEquals(next, machine.isExternalButtonHeld)
+                    if (changed) {
+                        // Both edges lock: the press, and the release.
+                        held = next
+                        armedSinceLock = false
+                        haveLastPoll = false
+                        noteLock()
+                    }
+                }
+
                 9 -> {
                     machine.rearmInPlace(now)
-                    armedSinceLock = true
+                    if (!held) armedSinceLock = true // refused during a hold
                     clickedThisRest = false
                     haveLastPoll = false
                     parkedOnLockedKey = false // an explicit request to fire again in place
                 }
 
                 else -> {
+                    val counting = machine.isCountingDown
                     val poll = machine.poll(now)
+
+                    // DwellClicker stops polling while this is false, so a poll
+                    // that would have changed anything must have been predicted.
+                    if (!counting) {
+                        assertFalse(poll.clicked, "fired while not counting down")
+                        assertEquals(0f, poll.progress, "progress reported while not counting down")
+                    }
+                    if (poll.clicked) {
+                        assertFalse(machine.isCountingDown, "still counting down after a click (locks must stop the ticker)")
+                    }
 
                     assertTrue(poll.progress.isFinite(), "progress not finite: $poll")
                     assertTrue(poll.progress in 0f..1f, "progress out of range: $poll")
+                    // The ring shows the countdown or nothing, never something else.
+                    assertTrue(
+                        poll.ringProgress == 0f || poll.ringProgress == poll.progress,
+                        "ring progress is neither hidden nor the countdown: $poll",
+                    )
                     assertEquals(0, java.lang.Float.compare(lastX, poll.x), "poll x drifted from last move")
                     assertEquals(0, java.lang.Float.compare(lastY, poll.y), "poll y drifted from last move")
 
@@ -156,6 +193,7 @@ class DwellMachineFuzzTest {
                         assertTrue(armedSinceLock, "clicked without any movement or re-arm since the last lock")
                         assertFalse(clickedThisRest, "the same rest fired twice")
                         assertFalse(paused && lastKey == null, "fired over the app while paused")
+                        assertFalse(held, "fired while a mouse button was held")
                         assertFalse(parkedOnLockedKey, "keyed target $lastKey re-fired without the pointer leaving it")
                         clickedThisRest = true
                         haveLastPoll = false
@@ -163,6 +201,9 @@ class DwellMachineFuzzTest {
                     } else {
                         if (paused && lastKey == null) {
                             assertEquals(0f, poll.progress, "progress reported over the app while paused")
+                        }
+                        if (held) {
+                            assertEquals(0f, poll.progress, "progress reported while a mouse button was held")
                         }
                         if (clickedThisRest) {
                             assertEquals(0f, poll.progress, "progress reported after a click with no movement")

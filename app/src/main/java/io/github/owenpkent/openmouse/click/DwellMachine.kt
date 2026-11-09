@@ -15,7 +15,9 @@ import kotlin.math.hypot
  * rules these mirror):
  *
  * - It starts **locked**, and re-locks after every click, after a physical click
- *   ([lockUntilMove]), on pause, after a live settings change, and on [reset].
+ *   or a wheel turn ([lockUntilMove]: the user acted for themselves, or the
+ *   content under the resting pointer changed), on pause, after a live settings
+ *   change, and on [reset].
  *   A lock is cleared only by deliberate pointer movement; no amount of elapsed
  *   time will.
  * - **Two tolerances.** [moveThresholdPx] is the jitter a running countdown
@@ -33,13 +35,21 @@ import kotlin.math.hypot
  *   app locks, and the ordinary distance from the rest point applies again.
  *   This is what stops a parked pointer from firing the same menu entry every
  *   dwell period, and a slip off a cell from tapping the app beside it.
+ * - **A held button suppresses dwelling** ([setExternalButtonHeld]) for the
+ *   whole hold, whatever the pointer does: a dwell must never cut short the
+ *   user's own drag or selection. Letting go locks until the pointer moves, so
+ *   the spot where the button came up is not clicked by the rest that follows.
  * - **Pause** ([setPaused]) suspends dwelling on the app but not on the menu
  *   (any rest with a non-null key), so a user who cannot click can still reach
  *   the resume entry. It locks in both directions.
  * - **Repeat in place** ([rearmInPlace]) restarts the countdown at the same
  *   anchor without requiring movement, for actions that are modes rather than
- *   one-shots (scrolling): one notch per dwell period for as long as the pointer
- *   keeps resting.
+ *   one-shots (scrolling). Only the first notch at a rest point waits the full
+ *   dwell time, because that one is the decision; a re-armed countdown runs for
+ *   the repeat interval instead, so another notch lands each interval for as
+ *   long as the pointer keeps resting (one notch per dwell time, three lines
+ *   every second at the defaults, was too slow to read a page by). Movement,
+ *   and every lock, go back to the full dwell time.
  *
  * The machine stays defined for any input rather than trusting its caller: a
  * dwell time below 1 ms reads as 1 ms, a negative (or NaN) threshold as 0, a
@@ -51,10 +61,15 @@ class DwellMachine(
     dwellTimeMs: Long = DEFAULT_DWELL_MS,
     moveThresholdPx: Float = DEFAULT_MOVE_THRESHOLD_PX,
     postActionThresholdPx: Float = moveThresholdPx,
+    repeatIntervalMs: Long = dwellTimeMs,
 ) {
     private var dwellTimeMs = clampDwell(dwellTimeMs)
     private var moveThresholdPx = clampThreshold(moveThresholdPx)
     private var postActionThresholdPx = clampThreshold(postActionThresholdPx)
+    // The period of a countdown re-armed in place ([rearmInPlace]). Without a
+    // separate value it is the dwell time, so a caller that never re-arms in
+    // place sees no difference.
+    private var repeatIntervalMs = clampDwell(repeatIntervalMs)
 
     /**
      * Update the settings live. The caller should [lockUntilMove] afterwards (as
@@ -65,10 +80,12 @@ class DwellMachine(
         dwellTimeMs: Long,
         moveThresholdPx: Float,
         postActionThresholdPx: Float = moveThresholdPx,
+        repeatIntervalMs: Long = dwellTimeMs,
     ) {
         this.dwellTimeMs = clampDwell(dwellTimeMs)
         this.moveThresholdPx = clampThreshold(moveThresholdPx)
         this.postActionThresholdPx = clampThreshold(postActionThresholdPx)
+        this.repeatIntervalMs = clampDwell(repeatIntervalMs)
     }
 
     // The position (and target key) the countdown is measured from, and the
@@ -85,11 +102,40 @@ class DwellMachine(
     private var locked = true
     private var lockedAfterAction = false
     private var paused = false
+    private var externalButtonHeld = false
+    // True while the running countdown is one that [rearmInPlace] started: it
+    // runs for the repeat interval, not the dwell time. Cleared by any new
+    // countdown that movement starts, and by every lock.
+    private var repeating = false
 
-    /** A snapshot of the machine at a point in time. */
-    data class Poll(val progress: Float, val clicked: Boolean, val x: Float, val y: Float)
+    /**
+     * A snapshot of the machine at a point in time. [progress] is the countdown
+     * (0 to 1); [ringProgress] is what the countdown ring should show: the same
+     * value, except 0 for the first fifth of a countdown (at most 250 ms,
+     * [ringDelayMs]). Once the machine is armed every brief pause in ordinary
+     * movement starts a countdown, and a ring shown from the first poll trailed
+     * the moving cursor. Only the feedback waits; the click does not.
+     */
+    data class Poll(
+        val progress: Float,
+        val clicked: Boolean,
+        val x: Float,
+        val y: Float,
+        val ringProgress: Float = progress,
+    )
 
     val isPaused: Boolean get() = paused
+
+    val isExternalButtonHeld: Boolean get() = externalButtonHeld
+
+    /**
+     * True while time alone can change something: a countdown is running, which
+     * means the machine is armed, no button is held, and it is not paused over
+     * the app. [DwellClicker] polls only while this is true, so an idle machine
+     * costs no wake-ups; every call that can arm it re-checks this afterwards.
+     */
+    val isCountingDown: Boolean
+        get() = !locked && !externalButtonHeld && !(paused && anchorKey == null)
 
     /**
      * Lock and re-baseline the rest timer. Called when the engine (re)starts, so
@@ -112,6 +158,13 @@ class DwellMachine(
         currentX = x
         currentY = y
         currentKey = restKey
+
+        // While the user holds a button the pointer is theirs: nothing arms,
+        // and the lock follows the pointer so letting go rests it where it is.
+        if (externalButtonHeld) {
+            lockUntilMove()
+            return
+        }
 
         val keyChanged = restKey != anchorKey
 
@@ -163,6 +216,7 @@ class DwellMachine(
     fun lockUntilMove() {
         locked = true
         lockedAfterAction = false
+        repeating = false
         anchorX = currentX
         anchorY = currentY
         anchorKey = currentKey
@@ -176,6 +230,7 @@ class DwellMachine(
     internal fun lockAfterAction() {
         locked = true
         lockedAfterAction = true
+        repeating = false
         anchorX = currentX
         anchorY = currentY
         anchorKey = currentKey
@@ -183,13 +238,16 @@ class DwellMachine(
 
     /**
      * Restart the countdown at the same anchor without requiring movement, for
-     * repeating actions (scroll): the next dwell period fires again if the
-     * pointer keeps resting. Movement re-anchors as usual.
+     * repeating actions (scroll): it fires again after the repeat interval if
+     * the pointer keeps resting, and again after each. Movement re-anchors as
+     * usual, and a countdown started by movement waits the full dwell time.
      */
     fun rearmInPlace(nowMs: Long) {
+        if (externalButtonHeld) return // the user's hold outranks a repeat
         restStart = nowMs
         locked = false
         lockedAfterAction = false
+        repeating = true
     }
 
     /**
@@ -205,13 +263,30 @@ class DwellMachine(
     }
 
     /**
+     * A mouse button went down (true) or every button is up again (false), as
+     * the caller observes it on each pointer event. While any button is held the
+     * machine stays locked whatever the pointer does, so a dwell can never cut
+     * short the user's own drag or selection; letting go locks until the pointer
+     * moves. Returns true when the state changed (and so locked), false for a
+     * redundant call, which disturbs nothing.
+     */
+    fun setExternalButtonHeld(held: Boolean): Boolean {
+        if (held == externalButtonHeld) return false
+        externalButtonHeld = held
+        lockUntilMove()
+        return true
+    }
+
+    /**
      * Evaluate the machine at [nowMs]. If the returned [Poll.clicked] is true the
      * machine has already locked itself (with the post-action distance), so the
      * same rest will not click twice. The firing poll reports zero progress so
      * the countdown ring clears.
      */
     fun poll(nowMs: Long): Poll {
-        if (locked) return Poll(0f, false, currentX, currentY)
+        // A hold keeps the machine locked already; the second test is belt and
+        // braces, so no future arming path can fire under the user's finger.
+        if (locked || externalButtonHeld) return Poll(0f, false, currentX, currentY)
         // Paused: only a keyed target (a menu cell) may still complete a dwell.
         if (paused && anchorKey == null) return Poll(0f, false, currentX, currentY)
         // A timestamp older than the anchor counts as no elapsed time, and a
@@ -219,12 +294,18 @@ class DwellMachine(
         // (the fuzz target drives both). The clamp on the divisor keeps progress
         // finite for any dwell time.
         val elapsed = elapsedSince(restStart, nowMs)
-        val progress = (elapsed.toFloat() / dwellTimeMs).coerceIn(0f, 1f)
+        // A countdown re-armed in place runs for the repeat interval; every
+        // other countdown (the decision) for the full dwell time.
+        val period = if (repeating) repeatIntervalMs else dwellTimeMs
+        val progress = (elapsed.toFloat() / period).coerceIn(0f, 1f)
         if (progress >= 1f) {
             lockAfterAction()
             return Poll(0f, clicked = true, x = currentX, y = currentY)
         }
-        return Poll(progress, clicked = false, x = currentX, y = currentY)
+        // The ring waits out the first fifth of the countdown (capped) so it is
+        // not drawn trailing a pointer that merely slowed down.
+        val ring = if (elapsed >= ringDelayMs(period)) progress else 0f
+        return Poll(progress, clicked = false, x = currentX, y = currentY, ringProgress = ring)
     }
 
     private fun startCountdown(x: Float, y: Float, key: Any?, nowMs: Long) {
@@ -234,11 +315,22 @@ class DwellMachine(
         restStart = nowMs
         locked = false
         lockedAfterAction = false
+        repeating = false // a new spot is a new decision: full dwell time
     }
 
     companion object {
         const val DEFAULT_DWELL_MS = 1000L
         const val DEFAULT_MOVE_THRESHOLD_PX = 14f
+
+        /** The longest the countdown ring waits before it is shown, however long the dwell. */
+        const val MAX_RING_DELAY_MS = 250L
+
+        /**
+         * How long the ring stays hidden at the start of a countdown of
+         * [periodMs]: a fifth of it, at most [MAX_RING_DELAY_MS]. Zero for a
+         * period under 5 ms, so a degenerate dwell still shows what it does.
+         */
+        fun ringDelayMs(periodMs: Long): Long = minOf(clampDwell(periodMs) / 5, MAX_RING_DELAY_MS)
 
         private fun clampDwell(ms: Long): Long = ms.coerceAtLeast(1L)
 

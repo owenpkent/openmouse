@@ -80,6 +80,24 @@
             android:valueTo="48" />
 
         <TextView
+            android:id="@+id/repeatLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:labelFor="@id/repeatSlider"
+            android:text="@string/settings_scroll_repeat"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/repeatSlider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stepSize="50"
+            android:valueFrom="300"
+            android:valueTo="2000" />
+
+        <TextView
             android:id="@+id/sizeLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -140,6 +158,44 @@
                 android:layout_height="wrap_content"
                 android:text="@string/settings_menu_right" />
         </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/updatesSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/settings_updates"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/updateCheckOnLaunchSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_update_check_on_launch"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/checkForUpdatesButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_update_check_now" />
+
+            <TextView
+                android:id="@+id/updateStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textSize="14sp" />
+
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"

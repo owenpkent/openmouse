@@ -16,6 +16,12 @@ val keystoreProperties = Properties().apply {
     if (hasReleaseKeystore) FileInputStream(keystorePropertiesFile).use { load(it) }
 }
 
+// The in-app update check (Settings > Updates) is the app's only network path.
+// F-Droid builds pass -PopenmouseUpdater=false so the whole feature, UI and
+// launch check included, compiles out: F-Droid signs with its own key, so an
+// APK from GitHub Releases could never install over it anyway.
+val updaterEnabled = providers.gradleProperty("openmouseUpdater").orElse("true").get().toBoolean()
+
 android {
     namespace = "io.github.owenpkent.openmouse"
     compileSdk = 36
@@ -28,6 +34,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("boolean", "UPDATER_ENABLED", updaterEnabled.toString())
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {
@@ -91,6 +103,9 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.jazzer.junit)
+    // Real org.json for ReleaseFeedTest: the unit-test android.jar returns
+    // default values from every method, including JSONObject's.
+    testImplementation(libs.org.json)
     testRuntimeOnly(libs.junit.platform.launcher)
 
     androidTestImplementation(libs.androidx.test.core)

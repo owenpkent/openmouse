@@ -121,6 +121,8 @@ class MouseAccessibilityService : AccessibilityService() {
         view.onPrimaryButton = { x, y -> handlePrimaryAction(x, y, fromDwell = false) }
         // Same rule as the modern path: another button is the user's own action.
         view.onOtherButton = { dwellClicker?.lockUntilMove() }
+        // And a button held, for as long as it is held, suppresses dwelling.
+        view.onButtonsChanged = { held -> dwellClicker?.setButtonHeld(held) }
         view.onScroll = { x, y, v -> handleScroll(x, y, v) }
         // A touchscreen DOWN on the legacy overlay during a passthrough means an
         // injected gesture landed on the overlay instead of the app.
@@ -186,10 +188,21 @@ class MouseAccessibilityService : AccessibilityService() {
         if (!event.isFromSource(InputDevice.SOURCE_MOUSE)) return
         val x = event.rawX
         val y = event.rawY
+        // Any button the user holds, for as long as it is held, keeps the dwell
+        // machine locked: a dwell must never cut short their own drag or
+        // selection. buttonState is the set of buttons down after this event,
+        // so the event that lets the last one go reads as "all up". A press is
+        // reported before the position, so the move that comes with it is seen
+        // under a held button; a release is reported after it, so the lock the
+        // release leaves anchors on whatever the pointer is over when the button
+        // comes up (a release that lands on a new menu entry must not arm it).
+        val held = event.buttonState != 0
+        if (held) dwellClicker?.setButtonHeld(true)
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER,
             MotionEvent.ACTION_HOVER_MOVE,
             MotionEvent.ACTION_MOVE,
+            MotionEvent.ACTION_BUTTON_RELEASE,
             -> onPointerMoved(x, y, draw = true)
 
             MotionEvent.ACTION_BUTTON_PRESS -> {
@@ -211,6 +224,7 @@ class MouseAccessibilityService : AccessibilityService() {
                 if (v != 0f) handleScroll(x, y, v)
             }
         }
+        if (!held) dwellClicker?.setButtonHeld(false)
     }
 
     private fun onPointerMoved(x: Float, y: Float, draw: Boolean) {
@@ -236,6 +250,7 @@ class MouseAccessibilityService : AccessibilityService() {
             prefs.dwellTimeMs,
             prefs.moveThresholdDp * density,
             prefs.postActionThresholdDp * density,
+            prefs.scrollRepeatMs,
         )
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)
@@ -267,7 +282,7 @@ class MouseAccessibilityService : AccessibilityService() {
      * What happens to the dwell machine afterwards depends on the route:
      * - a dwell that fired an app action has already locked itself with the
      *   post-action distance, except a repeating mode (scroll), which re-arms in
-     *   place so another notch lands each dwell period while the pointer rests;
+     *   place so another notch lands each repeat interval while the pointer rests;
      * - a menu choice or a physical click locks with the ordinary tolerance. A
      *   menu entry cannot re-fire until the pointer leaves it anyway, because
      *   the entry is the machine's rest key.
@@ -319,6 +334,18 @@ class MouseAccessibilityService : AccessibilityService() {
         }
         // Any menu choice cancels a half-started two-point gesture.
         clearPending()
+        syncBadge()
+    }
+
+    /**
+     * The badge beside the cross-hair names the current mode whenever it is not
+     * a plain tap, so a sticky scroll or a drag waiting for its end point is
+     * visible where the user is looking, not only on the menu at the edge.
+     */
+    private fun syncBadge() {
+        val menu = gestureMenu
+        val mode = menu?.currentMode ?: GestureAction.TAP
+        cursorView?.setBadge(if (mode == GestureAction.TAP) null else menu?.labelFor(mode))
     }
 
     /**
@@ -361,6 +388,12 @@ class MouseAccessibilityService : AccessibilityService() {
     }
 
     private fun handleScroll(x: Float, y: Float, vscroll: Float) {
+        // The user scrolled for themselves, so the content under a resting
+        // pointer has changed and a running countdown is no longer aimed at what
+        // they chose. Lock until the pointer moves, the same rule as a physical
+        // click. (A scroll injected by a dwell is a gesture, not a wheel event,
+        // so a repeating scroll mode never locks itself here.)
+        dwellClicker?.lockUntilMove()
         val dispatcher = gestureDispatcher ?: return
         // Wheel-up (vscroll > 0) reveals content above.
         runGesture(dispatcher.scroll(x, y, revealAbove = vscroll > 0f))
@@ -393,6 +426,7 @@ class MouseAccessibilityService : AccessibilityService() {
 
     private fun resetToTap() {
         gestureMenu?.currentMode = GestureAction.TAP
+        syncBadge()
     }
 
     private fun clearPending() {

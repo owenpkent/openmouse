@@ -9,6 +9,20 @@ tagged release.
 
 ### Added
 
+- An in-app update check against GitHub Releases, under Settings > Updates.
+  Off by default: press "Check for updates now", or turn on the check at
+  launch. It only talks to GitHub (the release feed on `api.github.com`, the
+  APK from `github.com`, redirects allowed onto GitHub's own hosts only),
+  refuses any APK not signed with the same key as the installed copy, and
+  leaves the final step to the system installer. The feature compiles out with
+  `-PopenmouseUpdater=false`, which the F-Droid recipe uses. This adds the
+  `INTERNET` and `REQUEST_INSTALL_PACKAGES` permissions; the privacy policy
+  describes the one network use.
+- An action badge beside the cross-hair names the current mode (double-tap,
+  hold, drag, swipe, scroll up or down) whenever it is not a plain tap, so a
+  sticky scroll or a drag waiting for its end point is visible where you are
+  looking, not only on the menu at the screen edge. It sits up and to the left
+  of the cross-hair and flips to the other side near an edge.
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in
@@ -18,8 +32,11 @@ tagged release.
   travel after a dwell click before the next countdown may start, so a shaky
   hand cannot click the same spot twice (the movement tolerance is unchanged).
   Default 20 dp; it never acts narrower than the movement tolerance.
-- Scroll up / down repeat while the pointer rests: one notch per dwell period,
-  instead of needing a fresh move between notches.
+- Scroll up / down repeat while the pointer rests, instead of needing a fresh
+  move between notches. The first notch at a rest point waits the full dwell
+  time; the notches after it land every scroll repeat interval, a new setting
+  (300 ms to 2 s, default 400 ms, the PowerToys Dwell Click default). One notch
+  per dwell time was too slow to read a page by.
 - Automated UI tests (`gradlew connectedDebugAndroidTest`, run in CI on API 30
   and 34 emulators): the cursor pipeline end to end (a dwell or button click
   lands exactly under the cross-hair, no double click while resting, tremor
@@ -32,6 +49,16 @@ tagged release.
 - Unit tests ported from the PowerToys Dwell Click engine suite (firing poll
   clears the ring, reset locks, timestamps older than the anchor, negative and
   NaN settings), on JUnit 5.
+
+### Changed
+
+- The dwell ticker runs only while a countdown is in progress. Locked after a
+  click, paused over the app, or with a mouse button held, the service no
+  longer wakes up every 16 ms for nothing; a pointer move or a scroll re-arm
+  starts it again. Less battery for the same behaviour.
+- The countdown ring stays hidden for the first fifth of a dwell (at most
+  250 ms), so it no longer flickers behind a pointer that merely slowed down.
+  Only the feedback waits; the click lands exactly when it did before.
 
 ### Fixed
 
@@ -51,6 +78,14 @@ tagged release.
 - Android 7-13: after a gesture, the overlay could turn touchable while
   capture was suspended for lack of mouse input (for example a resting pointer
   repeating a scroll), blocking the touchscreen until the next watchdog pass.
+- A mouse button held by the user suppresses dwell clicking for the whole hold,
+  however the pointer moves, so a dwell can no longer land in the middle of the
+  user's own drag or text selection. Letting go locks until the pointer moves.
+  Before, only the press locked, and a long enough drag could dwell-click.
+- Turning the scroll wheel cancels a running dwell countdown and locks until the
+  pointer moves. The content under a resting pointer has changed, so the
+  countdown was no longer aimed at what the user chose (the PowerToys Dwell
+  Click wheel rule).
 - Menu entries no longer re-fire while the pointer stays on them. A tremor
   inside a cell used to restart the countdown and could trigger Back or the
   menu toggle every dwell period; the cell is now the tolerance, and an entry

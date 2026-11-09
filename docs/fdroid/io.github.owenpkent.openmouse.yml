@@ -26,6 +26,12 @@ Builds:
     subdir: app
     gradle:
       - yes
+    # Compiles the in-app GitHub Releases update check out of the F-Droid build
+    # (BuildConfig.UPDATER_ENABLED = false). F-Droid ships updates itself and
+    # signs with its own key, so the check would be useless here, and leaving it
+    # out keeps the build free of any network code.
+    gradleprops:
+      - openmouseUpdater=false
 
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags

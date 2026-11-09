@@ -32,8 +32,9 @@ accessibility use. Suggested text (adapt as needed):
 > AccessibilityService API solely to (1) draw an on-screen cursor overlay
 > controlled by a physical mouse or trackball, and (2) perform the taps and
 > gestures the user initiates, via dispatchGesture. It does not read window
-> content, collect data, or make network connections. The service is declared
-> with android:isAccessibilityTool="true".
+> content or collect data. The only network use is an optional, user-initiated
+> check of the project's GitHub Releases for a newer version (off by default).
+> The service is declared with android:isAccessibilityTool="true".
 
 Also ensure prominent disclosure: the store listing and the in-app onboarding
 screen both explain what the service does (the onboarding already does).
@@ -47,9 +48,15 @@ Required. Use the live page: **https://owenpkent.github.io/openmouse/privacy-pol
 
 - Data collected: **None**
 - Data shared: **None**
-- Uses no network; nothing to encrypt in transit or delete.
+- The app does use the network, but only for the optional update check
+  (Settings > Updates, off by default): it fetches the release list and APK from
+  GitHub and sends no identifiers. No user data is collected, so there is
+  nothing to encrypt in transit or delete.
 
-Answer "No data collected or shared."
+Answer "No data collected or shared." Note that Play delivers updates itself, so
+the in-app check is mostly redundant on that channel; it only ever offers an
+APK signed with the GitHub release key, which cannot install over a Play-signed
+copy.
 
 ## Store listing (assets are ready in `fastlane/metadata/android/en-US/`)
 
