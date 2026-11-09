@@ -22,6 +22,11 @@ gestures.
    JAZZER_FUZZ=1 ./gradlew testDebugUnitTest --tests '*FuzzTest'
    ```
    CI runs the full ten-minute fuzz nightly (`.github/workflows/nightly-fuzz.yml`).
+4. Turn on the pre-push hook, which runs the unit tests and lint before every
+   push (the same checks as the CI fast job):
+   ```bash
+   ./gradlew installGitHooks      # or: git config core.hooksPath .githooks
+   ```
 
 To try a change on hardware: install the debug APK, plug in a mouse (USB OTG or
 Bluetooth), and enable **OpenMouse cursor** in Accessibility settings.
@@ -101,13 +106,36 @@ Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first. The short version:
 (see `DwellMachine`, `MenuGeometry`) so it can be unit tested on the JVM. The
 Android wrapper should be a thin pass-through.
 
+## Gates
+
+Every check that can stop a change, what triggers it, and what to do when it
+fails. The plan for the gates still to come is in [`docs/PARITY.md`](docs/PARITY.md).
+
+| Gate | Runs | When it fails |
+| --- | --- | --- |
+| Pre-push hook (`.githooks/pre-push`) | Before each `git push`: `./gradlew testDebugUnitTest lintDebug`, the same as the CI fast job. `./gradlew installGitHooks` turns it on. | Read the tail it prints (full log in `.git/pre-push.log`), fix the cause, push again. Never `--no-verify`. |
+| `Tests` (`ci.yml`) | Every pull request and every push to `main`. One required check that needs every job below (the vulnerability diff included) and fails if any did not succeed. The one skip it accepts is the vulnerability diff on a push to `main`, which has no base to diff against. | Open the job that is red in the run. |
+| Build, unit tests, lint | The debug APK, the JVM unit tests (the fuzz targets replay their seed corpus here), `lintDebug`, and a check that `app/gradle.lockfile` describes the build that just ran. | Reproduce with `./gradlew testDebugUnitTest lintDebug`. A stale lockfile (a Dependabot bump, a hand edit of `libs.versions.toml`): run `./gradlew :app:dependencies --write-locks` and commit the result. |
+| New vulnerabilities in this pull request (`osv` job in `ci.yml`, steps in `osv-diff.yml`) | Pull requests: OSV-Scanner on the merge base and on the head, failing only on an advisory the pull request introduces. `app/gradle.lockfile` locks what ships (the debug and release runtime classpaths), not test or lint tooling. The result files are kept outside the checkout, so nothing in the tree can alter the comparison. Until the lockfile is on the base branch the run reports and does not gate. | Bump the artifact named in the log in `gradle/libs.versions.toml`, regenerate the lockfile, commit both. If there is no fix or it does not apply, say why in the pull request. |
+| Vulnerability gate self-test (`osv-selftest.yml`) | Mondays, on demand, and on pull requests that change `osv-diff.yml` or itself: runs the gate's steps on a head with a planted jackson-databind 2.9.8 and symlinks over the result file names, and must see the gate fail; then on a head with nothing new, and must see it pass. Not part of `Tests`. | The gate would let a new advisory through: do not merge the change to `osv-diff.yml` until it passes. |
+| Vulnerabilities (`osv.yml`) | Mondays and on demand: a full scan of `app/gradle.lockfile` that fails on any known advisory. | Not a pull request check. Bump the artifact named in the log and regenerate the lockfile. |
+| CodeQL (`codeql.yml`) | Every push and pull request into `main`, and Wednesdays: GitHub code scanning over the Kotlin, from a traced debug build. | Open the alert under Security, Code scanning. Fix the code, or dismiss the alert there with a reason if it is wrong; the workflow itself fails only when the analysis could not run. |
+| Dependabot (`dependabot.yml`) | Weekly pull requests for Gradle and GitHub Actions, minor and patch bumps grouped. | Review and merge like any pull request; there is no auto-merge. A Gradle bump fails the lockfile check until you regenerate `app/gradle.lockfile` on its branch. |
+| Release build and lint (unsigned) | `assembleRelease` and `lintRelease`: minified and shrunk, the way a release ships, so a ProGuard or resource problem fails here and not at release time. The unsigned APK is kept a week. | Reproduce with `./gradlew assembleRelease lintRelease`. CI has no keystore, so the APK is unsigned; signing is never done in CI. |
+| `Reviewed` (`review-gate.yml`) | Every pull request into `main`, again on each push and each review. A commit status set on the head commit: success when a review with a summary was submitted on it and the newest one does not request changes. A reply to an inline comment does not count. A push leaves the new commit with no status until it is reviewed. | Get the pull request reviewed on its latest commit; after a push, review again. The workflow's own job, `Set the Reviewed status`, succeeds whatever it decides and fails only when it cannot read the reviews or write the status; then re-run it. |
+| Nightly fuzz (`nightly-fuzz.yml`) | 03:17 UTC daily, and on demand: each Jazzer target fuzzes for ten minutes in its own job, from the evolved corpus cached between nights. A finding opens the issue `Fuzz crash: <target>` (or comments on it when it is open) with the input in base64, where it goes, and the end of the log; the `fuzz-findings-<target>` artifact holds the file. Not a pull request check. | Put the file back where the issue says (the seed corpus directory under `app/src/test/resources/**/<Target>Inputs/<method>/`), replay with `./gradlew testDebugUnitTest --tests '*<Target>'`, fix the bug, and commit the file where it is as a permanent regression test. Do not weaken the invariants in the target. |
+
+Branch protection on `main` requires `Tests`, the `Reviewed` status, and the
+`Set the Reviewed status` check, and applies to admins too.
+
 ## Coding conventions
 
 - Kotlin, official code style (`kotlin.code.style=official`, enforced by ktlint
   defaults in Android Studio).
 - Match the surrounding code: comment the *why*, not the *what*.
 - No em dashes in code, comments, or docs. Use a period, a colon, or parentheses.
-- Run `./gradlew test lint` before opening a PR.
+- Run `./gradlew test lint` before opening a PR (the pre-push hook runs the
+  unit tests and debug lint for you).
 
 ## How to add a new gesture
 

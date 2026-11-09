@@ -9,6 +9,30 @@ tagged release.
 
 ### Added
 
+- Engineering gates, the first step of the parity plan in `docs/PARITY.md`:
+  CI actions pinned to a commit with credentials dropped after checkout,
+  concurrency groups, an unsigned release build plus `lintRelease` so a
+  release-only break fails in CI, and one aggregate `Tests` check for branch
+  protection. A `Reviewed` commit status (`review-gate.yml`) requires a review
+  on the latest commit of every pull request into `main`. A tracked pre-push
+  hook runs the unit tests and lint before every push (`./gradlew
+  installGitHooks` turns it on), and CONTRIBUTING.md gained a table of every
+  gate and what to do when it fails.
+- Dependency and code scanning: Gradle dependency locking (`app/gradle.lockfile`,
+  checked for freshness in CI), an OSV-Scanner gate that fails a pull request
+  only on an advisory it introduces (with a weekly full scan and a self-test
+  that plants a known-vulnerable artifact behind result-file symlinks), CodeQL
+  for the Kotlin code, and Dependabot for Gradle and GitHub Actions.
+- The nightly fuzz run fuzzes each target in its own job from a corpus cached
+  between nights, and a finding opens (or comments on) a `Fuzz crash: <target>`
+  issue with the input, where it goes, and the end of the log, instead of
+  leaving an artifact nobody is told about.
+- Release machinery: a release is a signed `vX.Y.Z` tag verified against the
+  committed `release-signers` file (`scripts/verify-release-tag.sh`),
+  `scripts/publish-release.ps1` builds the signed APK from a verified tag and
+  publishes the GitHub Release with the tag message as notes, and a unit test
+  pins `versionName` and `versionCode` to the changelog, the fastlane changelog
+  and the F-Droid metadata so a half-done bump fails in CI.
 - An in-app update check against GitHub Releases, under Settings > Updates.
   Off by default: press "Check for updates now", or turn on the check at
   launch. It only talks to GitHub (the release feed on `api.github.com`, the

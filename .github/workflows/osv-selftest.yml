@@ -1,0 +1,48 @@
+# Regression for the pull request vulnerability gate (osv-diff.yml, called by the
+# `osv` job in ci.yml). It runs the gate's own steps twice on main's lockfile:
+#
+# - `canary`: the head tree gets a lockfile line for jackson-databind 2.9.8 (an
+#   artifact with many published advisories) and symlinks from every result file
+#   name to old-results.json, which is what defeated the upstream reusable
+#   workflow. It passes only if the reporter fails on that artifact and the base
+#   results do not name it.
+# - `control`: the head is the base, so nothing is new and the reporter must
+#   pass.
+#
+# Runs weekly after the full scan, on demand, and on any pull request that
+# changes either file. It is not part of the `Tests` check: on a pull request
+# that changes the gate, read it there.
+#
+# When `canary` fails: the gate would let a new advisory through. Do not merge a
+# change to osv-diff.yml until it passes.
+name: Vulnerability gate self-test
+
+on:
+  schedule:
+    - cron: '30 7 * * 1'  # Mondays 07:30 UTC, after the weekly full scan
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/osv-diff.yml'
+      - '.github/workflows/osv-selftest.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    name: Catches a planted advisory behind result-file symlinks
+    uses: ./.github/workflows/osv-diff.yml
+    with:
+      base_ref: ${{ github.base_ref || 'main' }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      fixture: true
+      expect: introduced
+
+  control:
+    name: Passes when nothing is new
+    uses: ./.github/workflows/osv-diff.yml
+    with:
+      base_ref: ${{ github.base_ref || 'main' }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.sha }}

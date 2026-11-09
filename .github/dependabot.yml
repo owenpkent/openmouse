@@ -1,0 +1,29 @@
+# Dependency updates, weekly, with minor and patch bumps grouped into one pull
+# request per ecosystem so the queue stays short. A major bump gets its own pull
+# request. The CI check runs on each one; merging is the owner's call, and there
+# is deliberately no auto-merge workflow.
+#
+# Gradle: Dependabot edits gradle/libs.versions.toml but does not know about
+# app/gradle.lockfile, so its pull request fails the lockfile check in ci.yml
+# until the lockfile is regenerated. On such a pull request, check out the
+# branch, run `./gradlew :app:dependencies --write-locks`, and push the result
+# (CONTRIBUTING.md, Gates).
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      gradle-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]

@@ -42,8 +42,14 @@ keystore.properties
 # Crash artifacts
 *.stackdump
 
-# Jazzer fuzzing scratch (the working corpus and raw findings). Reproducers worth
-# keeping go under app/src/test/resources/**/*FuzzTestInputs/ instead.
-.cifuzz-corpus/
-crash-*
-timeout-*
+# Jazzer fuzzing scratch: the working corpus, and raw findings dropped in the
+# module directory when Jazzer cannot find the seed corpus. Anchored to app/ on
+# purpose: a reproducer Jazzer writes next to the seed corpus
+# (app/src/test/resources/**/*FuzzTestInputs/<method>/crash-<hash>) must stay
+# visible to git, because committing it there is how a finding becomes a
+# permanent regression test.
+/app/.cifuzz-corpus/
+/app/crash-*
+/app/timeout-*
+/app/slow-unit-*
+/app/oom-*

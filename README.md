@@ -114,6 +114,10 @@ two input-capture paths and how injected gestures reach the app below.
 - [ ] Drag-and-drop pickup (initial long-press before the drag)
 - [ ] Hide the system pointer on Android 14+ (only the cross-hair is shown)
 
+The engineering roadmap (CI gates, scanning, signed releases, an in-app updater)
+and the remaining dwell-behaviour items are tracked in
+[`docs/PARITY.md`](docs/PARITY.md).
+
 ## Building
 
 You need **Android Studio** (Koala or newer) or a local JDK 17+ and the Android
