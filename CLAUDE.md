@@ -18,6 +18,7 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 - `app/src/main/java/io/github/owenpkent/openmouse/` - `service/`, `cursor/`, `click/`, `menu/`, `gesture/`, `settings/`.
 - `app/src/test/java/.../{click,menu}/` - JVM unit tests (JUnit 5: `DwellMachineTest`, `MenuGeometryTest`). `.../fuzz/` - Jazzer fuzz targets (`DwellMachineFuzzTest`, `MenuGeometryFuzzTest`); they replay seeds under `gradlew test` and fuzz for real only with `JAZZER_FUZZ=1` (nightly workflow, or the same command locally).
 - `docs/ARCHITECTURE.md` - read first. `platform/` + `Android.bp` - AOSP/LineageOS system-app build (not day-to-day, unvalidated). `fastlane/` - F-Droid/Play metadata.
+- `docs/RELEASING.md` - release checklist. `docs/SIGNING.md` - the release key (never committed: the repo is public and the app injects taps), backups, why debug/release/F-Droid installs cannot update each other; the cert SHA-256 is pinned only in `release-cert.sha256`, which `scripts/publish-release.ps1` checks. `docs/TROUBLESHOOTING.md` - build, install, runtime and updater problems; keep it in step when changing watchdog timings, dwell locking or updater messages. `apks/` - `assembleDebug`/`installDebug` drop `openmouse-v<versionName>-debug.apk` there (`copyDebugApkToRoot`; only the README is tracked; never attach one to a release).
 
 ## Build, run, test
 
@@ -35,4 +36,4 @@ Open-source Android AccessibilityService that draws a large cross-hair cursor wh
 ## When to ask
 
 - Anything widening the trust surface: new permissions, capturing or persisting input, network calls, or collecting user data (OpenMouse stores only local settings and collects nothing). Report suspected tapjacking/injection abuse privately via SECURITY.md, not a public issue.
-- Public-facing changes: `applicationId`, `versionName`/`versionCode`, min/target SDK, `res/xml/accessibility_service_config.xml`, or F-Droid/Play metadata under `fastlane/`.
+- Public-facing changes: `applicationId`, `versionName`/`versionCode`, min/target SDK, `res/xml/accessibility_service_config.xml`, or F-Droid/Play metadata under `fastlane/`, or `release-cert.sha256` (a new signing key strands every install; see docs/SIGNING.md).

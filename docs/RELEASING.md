@@ -37,8 +37,11 @@ Safety answers are in [`docs/play/`](play/README.md).
 
 ## Pre-ship checklist
 
-- [ ] **Signing**: create a release keystore (keep it safe and backed up) or use
-      Play App Signing. F-Droid signs with its own key.
+- [x] **Signing**: the release keystore exists and signed v0.1.0; its
+      certificate is pinned in `release-cert.sha256`. Backups, publishing from
+      a second machine, and what a lost key means are in
+      [`SIGNING.md`](SIGNING.md). Play would add Play App Signing; F-Droid
+      signs with its own key.
 - [ ] **Release build**: turn on `isMinifyEnabled` + shrinkResources for release;
       verify the ProGuard keep rule for the service still holds and the app runs.
 - [ ] **Versioning**: bump `versionCode` / `versionName` per release; tag it.
@@ -120,11 +123,16 @@ for every merged pull request, because each needs the owner's signature.
    ```
 
    The script refuses a dirty tree, a HEAD that is not the tag, a tag that does
-   not verify, or a missing keystore. It writes `dist/openmouse-v0.2.0.apk` and
+   not verify, a missing keystore, or an APK that `apksigner` does not verify
+   or that is signed with any certificate other than the one pinned in
+   `release-cert.sha256` ([SIGNING.md](SIGNING.md); `-CheckApk <apk>` runs just
+   that check, for example on a downloaded asset). It writes `dist/openmouse-v0.2.0.apk` and
    its SHA-256, and creates the GitHub Release with the tag message as notes.
    The in-app updater looks for the `openmouse-*.apk` asset of the latest
    release, and Android installs it only over an app signed with the same key,
-   so the keystore must be the one that signed what users have.
+   so the keystore must be the one that signed what users have. Never attach a
+   debug APK (such as the `apks/` copy) to a release. Users' install and update
+   problems are covered in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 5. Play: roll through **internal → closed → open** testing tracks before
    production. Recruit real testers (see below) on the closed track.
 6. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.

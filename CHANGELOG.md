@@ -33,6 +33,20 @@ tagged release.
   publishes the GitHub Release with the tag message as notes, and a unit test
   pins `versionName` and `versionCode` to the changelog, the fastlane changelog
   and the F-Droid metadata so a half-done bump fails in CI.
+- The release signing certificate is pinned: `release-cert.sha256` holds its
+  SHA-256, `scripts/publish-release.ps1` refuses to publish an APK that
+  `apksigner` does not verify or that has any other signer (`-CheckApk <apk>`
+  runs that check alone), and `ReleaseMetadataTest` checks the file's format.
+- `docs/SIGNING.md`: the release key and why it is never committed (a public
+  key would let anyone ship an "update" to a service that injects taps),
+  backups, publishing from a second machine, what a lost key means, and why
+  debug, GitHub and F-Droid installs cannot update each other.
+- `docs/TROUBLESHOOTING.md`: build errors, installing (package conflicts,
+  unknown sources, the Android 13+ "Restricted setting" block), the cursor and
+  touchscreen watchdogs, mouse disconnects, and what the in-app updater's
+  messages mean.
+- `assembleDebug` and `installDebug` copy the debug APK to
+  `apks/openmouse-v<versionName>-debug.apk` for sideloading (`apks/README.md`).
 - Pause / Resume entry in the gesture menu. Pausing stops dwell clicking on
   the app; the menu keeps working by dwell, so Resume stays reachable without
   a physical button. The menu grid widens on a short screen (a phone in
