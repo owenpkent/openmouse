@@ -8,7 +8,8 @@
       1. Reads versionName and versionCode from app/build.gradle.kts and requires
          the working tree to be clean and checked out at the tag v<versionName>.
       2. Verifies that tag with scripts/verify-release-tag.sh (an SSH signature
-         from a key in release-signers, named for the tag, with a message).
+         from a key in the release-signers on main, so git fetch origin first;
+         named for the tag, with a message).
       3. Builds assembleRelease. keystore.properties must exist so the APK is
          signed: Android (and the in-app updater) only install an update signed
          with the same certificate as the installed app. The built APK must

@@ -65,9 +65,22 @@ for the tag, and `scripts/verify-release-tag.sh` is what anyone, the publish
 script included, runs before trusting one.
 
 A tag verifies when it is an annotated tag named for itself, carries a message
-(the message is the release notes), and carries exactly one SSH signature from a
-key in `release-signers`. `git verify-tag` is pointed at that file alone, so a
-key that is merely in the owner's git configuration does not count.
+(the message is the release notes), and ends in exactly one SSH signature (no
+OpenPGP or X.509 signature anywhere in it) from a key in `release-signers`.
+`git verify-tag` is pointed at that file alone and forced onto the SSH backend,
+so a key that is merely in the owner's git configuration does not count.
+
+The `release-signers` that counts is the one **on `main`**
+(`refs/remotes/origin/main`, so `git fetch origin` first), never the copy in
+the checkout or in the tag being verified: otherwise a tag could carry a commit
+that adds its own key. A change to `release-signers` therefore takes effect
+only once it is merged to `main`. To verify against another ref (the first
+release, before `release-signers` reaches `main`, or a test), set
+`OPENMOUSE_SIGNERS_REF` to a full ref name such as `refs/heads/main`; a short
+name like `origin/main` could be shadowed by a tag of that name.
+
+SSH signing needs git 2.34 or newer (`git --version`); older git rejects
+`gpg.format=ssh`, and the verifier then fails every tag.
 
 ### One-time key setup
 
@@ -82,6 +95,9 @@ git config user.signingkey ~/.ssh/openmouse-release.pub
 printf 'openmouse-release namespaces="git" %s\n' "$(cut -d' ' -f1,2 ~/.ssh/openmouse-release.pub)" >> release-signers
 git add release-signers && git commit -m "chore(release): allow the release key"
 ```
+
+Merge that commit to `main` before tagging with the new key; until then the
+verifier does not know the key.
 
 Check that signing and verifying work before the first release:
 

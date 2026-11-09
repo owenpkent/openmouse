@@ -33,6 +33,13 @@ tagged release.
   publishes the GitHub Release with the tag message as notes, and a unit test
   pins `versionName` and `versionCode` to the changelog, the fastlane changelog
   and the F-Droid metadata so a half-done bump fails in CI.
+- `scripts/verify-release-tag.sh` trusts only the `release-signers` on `main`
+  (`refs/remotes/origin/main`, overridable with `OPENMOUSE_SIGNERS_REF`), never
+  the copy in the tag being verified, so a tag cannot bring its own key. It
+  forces git's SSH backend, requires ssh-keygen's `Good "git" signature for`
+  verdict, and accepts only a single SSH signature block at the very end of
+  the tag with no OpenPGP or X.509 marker. CI now also checks that a trusted
+  key verifies and an unlisted one does not.
 - The release signing certificate is pinned: `release-cert.sha256` holds its
   SHA-256, `scripts/publish-release.ps1` refuses to publish an APK that
   `apksigner` does not verify or that has any other signer (`-CheckApk <apk>`
