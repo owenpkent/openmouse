@@ -28,7 +28,10 @@ tagged release.
 - The nightly fuzz run fuzzes each target in its own job from a corpus cached
   between nights, and a finding opens (or comments on) a `Fuzz crash: <target>`
   issue with the input, where it goes, and the end of the log, instead of
-  leaving an artifact nobody is told about.
+  leaving an artifact nobody is told about. Every `*FuzzTest` class is in
+  the nightly matrix (CI checks), and a `JAZZER_FUZZ=1` run is never answered
+  from Gradle's up-to-date check or build cache, so a requested campaign
+  always fuzzes.
 - Release machinery: a release is a signed `vX.Y.Z` tag verified against the
   committed `release-signers` file (`scripts/verify-release-tag.sh`),
   `scripts/publish-release.ps1` builds the signed APK from a verified tag and

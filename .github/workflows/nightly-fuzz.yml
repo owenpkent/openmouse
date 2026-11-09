@@ -1,7 +1,8 @@
 name: Nightly fuzz
 
 # Coverage-guided fuzzing (Jazzer) of the pure cores: the dwell state machine,
-# the menu geometry, and the legacy passthrough gate. Each target under
+# the menu geometry, the legacy passthrough gate, and the swallowed-gesture
+# retry tracker. Each target under
 # app/src/test/.../fuzz runs in fuzzing mode for its full @FuzzTest maxDuration
 # (10 minutes), one job per target because Jazzer fuzzes one target per JVM.
 # Nothing here is a pull request check: fuzzing is open-ended by nature, so it
@@ -43,7 +44,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [DwellMachineFuzzTest, MenuGeometryFuzzTest, PassthroughGateFuzzTest]
+        # Every *FuzzTest.kt class under app/src/test/.../fuzz, one per line; the
+        # CI fast job fails when this list and the tree disagree.
+        target:
+          - DwellMachineFuzzTest
+          - MenuGeometryFuzzTest
+          - PassthroughGateFuzzTest
+          - SwallowedGestureTrackerFuzzTest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

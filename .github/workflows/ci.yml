@@ -66,6 +66,20 @@ jobs:
       # The nightly fuzz workflow's reproducer collection is shell, not Gradle,
       # so its self-test (plant a crash and a timeout file, collect, assert both
       # were found, clean up) runs here where every push exercises it.
+      # Each fuzz target runs nightly only if nightly-fuzz.yml lists it, and a
+      # merge once dropped one silently. Compare the target classes in the tree
+      # with the matrix, both ways.
+      - name: Every fuzz target is in the nightly matrix
+        run: |
+          tree=$(find app/src/test -name '*FuzzTest.kt' -exec basename {} .kt \; | sort)
+          matrix=$(sed -n '/^        target:$/,/^    steps:$/p' .github/workflows/nightly-fuzz.yml | sed -n 's/^          - \([A-Za-z0-9]*FuzzTest\)$/\1/p' | sort)
+          if [ -z "$matrix" ] || [ "$tree" != "$matrix" ]; then
+            echo "::error::nightly-fuzz.yml's target matrix does not match the *FuzzTest.kt classes."
+            diff <(echo "$tree") <(echo "$matrix") || true
+            exit 1
+          fi
+          echo "$tree"
+
       - name: Fuzz findings collector self-test
         run: sh scripts/collect-fuzz-findings.sh --self-test
 

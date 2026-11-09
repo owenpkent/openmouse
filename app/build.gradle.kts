@@ -88,9 +88,14 @@ android {
             // JAZZER_FUZZ=1 each target fuzzes for its @FuzzTest maxDuration, and
             // Jazzer fuzzes only one target per JVM, so every test class gets its
             // own JVM in that mode or the second target is silently skipped.
+            // A fuzz campaign is also never up to date and never cached: JAZZER_FUZZ
+            // is not a task input, so Gradle would otherwise answer a fuzz request
+            // with the last seed replay (UP-TO-DATE, or FROM-CACHE after a clean)
+            // and no fuzzer would run. Untracked, every request runs Jazzer.
             System.getenv("JAZZER_FUZZ")?.let {
                 test.environment("JAZZER_FUZZ", it)
                 test.setForkEvery(1)
+                test.doNotTrackState("a fuzz campaign is open-ended; never reuse a previous result")
             }
             // Jazzer attaches its agent at runtime; JDK 21+ warns unless this is set.
             test.jvmArgs("-XX:+EnableDynamicAgentLoading")
