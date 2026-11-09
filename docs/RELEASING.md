@@ -45,8 +45,10 @@ Safety answers are in [`docs/play/`](play/README.md).
 - [ ] **App icon polish**: address the launcher-icon lint (non-square silhouette,
       add a `<monochrome>` layer for themed icons).
 - [ ] **Privacy policy**: host a short page (GitHub Pages works). The honest and
-      strong story: OpenMouse collects nothing and sends nothing; settings are
-      stored locally. Required by Play for accessibility apps.
+      strong story: OpenMouse collects nothing; settings are stored locally.
+      F-Droid and Play builds make no network connection; the sideload APK only
+      asks GitHub for a newer release once per launch (on by default, can be
+      turned off). Required by Play for accessibility apps.
 - [ ] **Data Safety form** (Play): "No data collected / shared."
 - [ ] **Localization**: the UI is already string-resourced; translations widen
       reach a lot for an accessibility tool.
@@ -118,6 +120,9 @@ for every merged pull request, because each needs the owner's signature.
    git checkout v0.2.0
    pwsh -File scripts\publish-release.ps1          # add -Draft to read it over first
    ```
+
+   This is the default build, updater included. The Play AAB must instead be
+   built with `-PopenmouseUpdater=false` (see [`docs/play/`](play/README.md)).
 
    The script refuses a dirty tree, a HEAD that is not the tag, a tag that does
    not verify, or a missing keystore. It writes `dist/openmouse-v0.2.0.apk` and

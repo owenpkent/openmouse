@@ -20,6 +20,7 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 | `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
 | `ReleaseFeed` | **Pure** GitHub release parsing, version comparison and URL allow-list (unit tested). |
+| `LaunchCheck` | **Pure** rule for the once-per-launch update check: default on, explicit off kept, never when compiled out (unit tested). |
 | `UpdateChecker` | Fetches the release feed and APK, checks the signing certificate, hands off to the installer. |
 | `UpdatePrompt` | The "new version" dialog shared by Settings and the launch check. |
 
@@ -342,9 +343,16 @@ Sideloading from GitHub Releases is the only live channel, so the app can look
 for its own updates there. This is the **only code in OpenMouse that touches
 the network**, and it is built to stay narrow:
 
-- **Opt-in.** `UpdateChecker.check` runs when the user presses "Check for
-  updates now" in Settings, or at launch if `updateCheckOnLaunch` is on (default
-  off, once per process). There is no scheduled job and no background service.
+- **Once per launch, or on request.** `UpdateChecker.check` runs when the user
+  presses "Check for updates now" in Settings, or once per process when
+  `MainActivity` opens if the launch check is on. It is on by default in builds
+  that carry the updater (the sideload APK has no store to tell it about new
+  versions); the pure `LaunchCheck` decides, from the build flag, the stored
+  switch (absent means the default, an explicit `false` always wins) and the
+  per-process latch, and is unit-tested (`LaunchCheckTest`). The launch check is
+  quiet: it shows nothing unless a newer release exists. There is no scheduled
+  job and no background service, and the accessibility service never touches
+  the network.
 - **Two hosts.** The feed is `GET api.github.com/repos/owenpkent/openmouse/
   releases/latest` with an `Accept: application/vnd.github+json` header and a
   `OpenMouse/<version>` user agent (GitHub requires one); nothing else is sent.
@@ -367,8 +375,15 @@ the network**, and it is built to stay narrow:
   the app first sends them to grant "install unknown apps" if it has not been.
 - **Compile-out.** `BuildConfig.UPDATER_ENABLED` comes from the Gradle property
   `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
-  Settings section and skips the launch check; the F-Droid recipe passes it,
-  because F-Droid signs with its own key and ships updates itself.
+  Settings section and skips the launch check (R8 then drops the updater code).
+  The updater's manifest entries (`INTERNET`, `REQUEST_INSTALL_PACKAGES`, the
+  `FileProvider`) live in `app/src/updater/AndroidManifest.xml`, which
+  `app/build.gradle.kts` merges in (`sources.manifests.addStaticManifestFile`)
+  only when the updater is compiled in, so a flag-off APK declares no network
+  permission at all.
+  The F-Droid recipe and the Play build both pass it: both stores sign with
+  their own key and ship updates themselves, and Play policy forbids an app
+  updating itself outside Play. Those builds make no network connection.
 - **No retained state.** Every callback checks that the activity that asked
   for it is still alive (`UpdatePrompt.shouldDeliver`: neither finishing nor
   destroyed) and otherwise drops the result. Rotating or leaving Settings

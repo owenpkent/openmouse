@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Everything the in-app updater (update/) needs from the manifest.
+    app/build.gradle.kts merges this file over src/main/AndroidManifest.xml only
+    when the updater is compiled in (the default, sideload build). Builds made with
+    -PopenmouseUpdater=false (F-Droid, Play) never see it, so they declare no
+    network permission, cannot request package installs and carry no
+    FileProvider.
+
+    INTERNET is for asking GitHub Releases for the latest version and fetching the
+    APK; REQUEST_INSTALL_PACKAGES hands that APK to the system installer. The check
+    runs once per launch (on by default, can be turned off) or when the user asks;
+    installing always needs the user's go-ahead.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- Exposes the downloaded update APK (cache/updates/) to the installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>

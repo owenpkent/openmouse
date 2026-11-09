@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
+import io.github.owenpkent.openmouse.update.LaunchCheck
 
 /**
  * Typed wrapper over SharedPreferences for OpenMouse's user settings.
@@ -70,12 +71,21 @@ class OpenMouseSettings(context: Context) {
         set(value) = prefs.edit { putBoolean(KEY_MENU_RIGHT, value) }
 
     /**
-     * Whether opening the app checks GitHub Releases for a newer version. Off by
-     * default: the update check is the app's only network use, so it is opt-in.
+     * Whether opening the app checks GitHub Releases for a newer version. On by
+     * default (see [LaunchCheck]); an explicit `false` from the Settings switch is
+     * kept. Only consulted when the updater is compiled in.
      */
     var updateCheckOnLaunch: Boolean
-        get() = prefs.getBoolean(KEY_UPDATE_CHECK_ON_LAUNCH, false)
+        get() = LaunchCheck.enabled(storedUpdateCheckOnLaunch)
         set(value) = prefs.edit { putBoolean(KEY_UPDATE_CHECK_ON_LAUNCH, value) }
+
+    /** The raw stored switch, or null when the user never changed it. */
+    val storedUpdateCheckOnLaunch: Boolean?
+        get() = if (prefs.contains(KEY_UPDATE_CHECK_ON_LAUNCH)) {
+            prefs.getBoolean(KEY_UPDATE_CHECK_ON_LAUNCH, LaunchCheck.DEFAULT_ON)
+        } else {
+            null
+        }
 
     /** The resolved cursor color (ARGB int) for the current index. */
     val cursorColor: Int get() = CURSOR_COLORS[cursorColorIndex]
