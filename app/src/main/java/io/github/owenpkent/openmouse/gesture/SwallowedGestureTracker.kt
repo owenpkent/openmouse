@@ -15,10 +15,14 @@ import kotlin.math.abs
  * action is silently lost.
  *
  * The overlay reports every touchscreen DOWN it rejects. Each one is matched,
- * first in first out, to the oldest stroke that starts at that point, was
- * dispatched no later, and is not yet claimed (injected strokes arrive in the
- * order they were dispatched). The rule the service relies on is **never
- * repeat what reached the app**:
+ * first in first out, to the oldest stroke that starts at that point, could
+ * have produced a DOWN stamped at that event time, and is not yet claimed
+ * (injected strokes arrive in the order they were dispatched). A gesture's
+ * touches are stamped no earlier than its dispatch and no later than it
+ * ended (its completion callback, or failing that its settle), so the event
+ * time, not the moment the report arrives, says which gestures it can belong
+ * to. The rule the service relies on is **never repeat what reached the
+ * app**:
  *
  * - a gesture counts as swallowed only if *every* one of its strokes was seen
  *   on the overlay. A double tap whose second stroke got through has partly
@@ -27,7 +31,12 @@ import kotlin.math.abs
  *   elsewhere on the screen claims nothing;
  * - settled gestures are kept for [TOMBSTONE_MS], still first in line, so a
  *   DOWN that arrives late is absorbed by its own gesture rather than credited
- *   to a newer one that reached the app;
+ *   to a newer one that reached the app. Where the event time fits more than
+ *   one gesture, the older wins: losing a click is recoverable, a repeat is
+ *   not;
+ * - a gesture that has ended never claims a DOWN stamped after it ended, so a
+ *   click that reached the app cannot take the DOWN of the next click at the
+ *   same spot and leave that one unresent;
  * - only the newest action the user asked for is resent ([requested] is called
  *   for every gesture and every menu choice), and only within
  *   [MAX_RETRY_LAG_MS] of its first attempt completing: sooner than a person
@@ -54,6 +63,15 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
         val strokes: Int get() = starts.size / 2
         var swallowedStrokes = 0
         var settledAtMs: Long? = null
+
+        // No touch of this gesture is stamped later than this: when its
+        // completion callback ran, or its settle if that came first.
+        var endedAtMs: Long? = null
+
+        fun couldBeStampedAt(eventTimeMs: Long): Boolean {
+            val ended = endedAtMs
+            return eventTimeMs >= dispatchedMs && (ended == null || eventTimeMs <= ended)
+        }
     }
 
     // Insertion-ordered: iteration is dispatch order, and the oldest entry is
@@ -107,13 +125,27 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
     }
 
     /**
+     * Gesture [id]'s completion (or cancellation) callback ran at [nowMs].
+     * Every touch the platform injected for it was stamped by then, so from
+     * here on it only claims DOWNs stamped no later. Call it before [settle];
+     * a gesture settled without it is taken to have ended at its settle. An
+     * unknown, settled or already completed id is ignored.
+     */
+    fun completed(id: Int, nowMs: Long) {
+        val e = entries[id] ?: return
+        if (e.endedAtMs == null) e.endedAtMs = nowMs
+    }
+
+    /**
      * A touchscreen DOWN (not the mouse) reached the overlay at ([x], [y]),
-     * stamped [eventTimeMs]. Claims the oldest stroke it can be, settled or
-     * not. Returns whether it matched one.
+     * stamped [eventTimeMs] (MotionEvent.eventTime: when it was injected, not
+     * when it arrived). Claims the oldest stroke it can be, settled or not,
+     * among the gestures in flight at that time. Returns whether it matched
+     * one.
      */
     fun overlayTouched(eventTimeMs: Long, x: Float, y: Float): Boolean {
         for (e in entries.values) {
-            if (eventTimeMs < e.dispatchedMs || e.swallowedStrokes >= e.strokes) continue
+            if (!e.couldBeStampedAt(eventTimeMs) || e.swallowedStrokes >= e.strokes) continue
             val i = e.swallowedStrokes * 2
             if (near(e.starts[i], x) && near(e.starts[i + 1], y)) {
                 e.swallowedStrokes++
@@ -135,6 +167,7 @@ class SwallowedGestureTracker(tolerancePx: Float = DEFAULT_TOLERANCE_PX) {
         val e = entries[id] ?: return false
         if (e.settledAtMs != null) return false
         e.settledAtMs = nowMs
+        if (e.endedAtMs == null) e.endedAtMs = nowMs
         val newest = e.request == latestRequest
         if (newest && latestFirstSettleMs == null) latestFirstSettleMs = nowMs
         val wholeGestureSwallowed = e.strokes > 0 && e.swallowedStrokes == e.strokes

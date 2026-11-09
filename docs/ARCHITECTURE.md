@@ -84,11 +84,18 @@ edges, each guarded:
    took over 75 ms) the overlay is still touchable when the gesture arrives,
    takes it, and the tap is lost. So `CursorView` also reports any touchscreen
    DOWN it rejects, and the pure `SwallowedGestureTracker` matches it, first in
-   first out, to the oldest outstanding stroke that starts at that point and
-   was dispatched no later (each `Injection` carries its stroke start points).
+   first out, to the oldest unclaimed stroke that starts at that point and
+   whose gesture was in flight at the DOWN's event time: dispatched no later,
+   and not yet ended (its completion callback, or failing that its settle).
+   Each `Injection` carries its stroke start points, and the event time is
+   when the platform injected the touch, not when the overlay got it.
    A short settle after each completion lets a late DOWN arrive, and settled
    gestures stay on record for a second so a late DOWN is absorbed by its own
-   gesture, never credited to a newer one. The gesture runs again, after a
+   gesture, never credited to a newer one. Where a DOWN fits two gestures in
+   flight together, the older takes it (a lost click is recoverable, a repeat
+   is not); a gesture that has ended never takes a later one's DOWN, so a
+   click that reached the app cannot leave the next, swallowed click at the
+   same spot unresent. The gesture runs again, after a
    longer wait (24, then 100, 200 ms), only if every one of its strokes was
    swallowed, it is still the newest request (every gesture and every menu
    choice is one), and it is within 400 ms of the first attempt completing.

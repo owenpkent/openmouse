@@ -10,17 +10,20 @@ import kotlin.math.abs
 
 /**
  * Jazzer fuzz target for swallowed-gesture detection. The fuzzer drives
- * requested / dispatched / overlayTouched / settle / shouldDispatch / reset with
- * arbitrary (including backwards, extreme and NaN) times, coordinates, ids and
- * attempts. Every answer is checked against a plain reference model, and the
- * safety rule is asserted on its own terms:
+ * requested / dispatched / completed / overlayTouched / settle / shouldDispatch /
+ * reset with arbitrary (including backwards, extreme and NaN) times,
+ * coordinates, ids and attempts. Every answer is checked against a plain
+ * reference model, and the safety rule is asserted on its own terms:
  *
  * - settle() says resend only if every stroke of that gesture was claimed by an
- *   overlay DOWN at its start point stamped no earlier than its dispatch, it is
- *   the newest request, attempts remain, and the time is inside the window
- *   since the request's first attempt settled;
+ *   overlay DOWN at its start point stamped no earlier than its dispatch and no
+ *   later than it ended (completed, or else settled), it is the newest request,
+ *   attempts remain, and the time is inside the window since the request's
+ *   first attempt settled;
  * - a retry is only ever allowed to go out for the newest request, inside that
  *   window;
+ * - a DOWN is only ever credited to a gesture in flight at its event time
+ *   (dispatched no later, not ended earlier) with a stroke starting there;
  * - one DOWN claims at most one stroke; an id is answered once;
  * - outstanding matches the model and the memory never exceeds the cap;
  * - the first wait rises for good once any stroke has been swallowed, and a
@@ -34,6 +37,7 @@ class SwallowedGestureTrackerFuzzTest {
         val strokes get() = starts.size / 2
         var claimed = 0
         var settledAtMs: Long? = null
+        var endedAtMs: Long? = null
     }
 
     @FuzzTest(maxDuration = "10m")
@@ -53,7 +57,7 @@ class SwallowedGestureTrackerFuzzTest {
         }
 
         while (data.remainingBytes() > 0) {
-            when (data.consumeInt(0, 5)) {
+            when (data.consumeInt(0, 6)) {
                 0 -> {
                     latest = tracker.requested()
                     firstSettle = null
@@ -91,9 +95,20 @@ class SwallowedGestureTrackerFuzzTest {
                     }
                     val at = data.consumeLong()
 
+                    fun inFlightAt(e: Entry): Boolean {
+                        val ended = e.endedAtMs
+                        return at >= e.dispatchedMs && (ended == null || at <= ended)
+                    }
+
+                    // Stated without the model's first-in-first-out order: a
+                    // stroke starting there, of a gesture in flight at that time.
+                    val couldBeAnyones = model.values.any { e ->
+                        inFlightAt(e) && (0 until e.strokes).any { near(e.starts[it * 2], x) && near(e.starts[it * 2 + 1], y) }
+                    }
+
                     var expected = false
                     for (e in model.values) {
-                        if (at < e.dispatchedMs || e.claimed >= e.strokes) continue
+                        if (!inFlightAt(e) || e.claimed >= e.strokes) continue
                         val i = e.claimed * 2
                         if (near(e.starts[i], x) && near(e.starts[i + 1], y)) {
                             e.claimed++
@@ -102,7 +117,11 @@ class SwallowedGestureTrackerFuzzTest {
                             break
                         }
                     }
-                    assertEquals(expected, tracker.overlayTouched(at, x, y), "overlayTouched($at, $x, $y)")
+                    val claimed = tracker.overlayTouched(at, x, y)
+                    assertEquals(expected, claimed, "overlayTouched($at, $x, $y)")
+                    if (claimed) {
+                        assertTrue(couldBeAnyones, "credited a DOWN no gesture in flight at $at could have made")
+                    }
                 }
 
                 3 -> {
@@ -117,6 +136,7 @@ class SwallowedGestureTrackerFuzzTest {
                     var expected = false
                     if (e != null && e.settledAtMs == null) {
                         e.settledAtMs = now
+                        if (e.endedAtMs == null) e.endedAtMs = now
                         val newest = e.request == latest
                         if (newest && firstSettle == null) firstSettle = now
                         expected = e.strokes > 0 && e.claimed == e.strokes && newest &&
@@ -130,6 +150,17 @@ class SwallowedGestureTrackerFuzzTest {
                         assertTrue(e!!.strokes > 0 && e.claimed == e.strokes, "resending a gesture not wholly swallowed")
                         assertEquals(latest, e.request, "resending something superseded")
                     }
+                }
+
+                5 -> {
+                    val id = if (issued.isNotEmpty() && data.consumeBoolean()) {
+                        issued[data.consumeInt(0, issued.size - 1)]
+                    } else {
+                        data.consumeInt()
+                    }
+                    val now = data.consumeLong()
+                    tracker.completed(id, now)
+                    model[id]?.let { if (it.endedAtMs == null) it.endedAtMs = now }
                 }
 
                 4 -> {
