@@ -40,6 +40,7 @@
     pwsh -File scripts\publish-release.ps1 -Draft
     pwsh -File scripts\publish-release.ps1 -CheckApk dist\openmouse-v0.1.0.apk
 #>
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [switch]$Draft,
     [switch]$SkipBuild,
@@ -47,6 +48,17 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# -CheckApk is relative to where the caller stands, so resolve it (and expand ~)
+# before moving to the repository root.
+if ($CheckApk) {
+    $resolvedApk = Resolve-Path -LiteralPath $CheckApk -ErrorAction SilentlyContinue
+    if (-not $resolvedApk) {
+        Write-Host "publish-release: $CheckApk does not exist" -ForegroundColor Red
+        exit 1
+    }
+    $CheckApk = $resolvedApk.ProviderPath
+}
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $repoRoot
@@ -75,37 +87,40 @@ function Get-PinnedCertSha256 {
     return $lines[0]
 }
 
-# The SDK the build uses: ANDROID_HOME, then ANDROID_SDK_ROOT, then sdk.dir in
-# local.properties (a Java properties file, so \: and \\ are escapes).
-function Get-SdkDir {
-    foreach ($candidate in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT)) {
-        if ($candidate -and (Test-Path $candidate)) { return $candidate }
-    }
+# Candidate SDK folders, in the order the Android Gradle plugin uses: sdk.dir in
+# local.properties (a Java properties file, so \: and \\ are escapes), then
+# ANDROID_HOME, then ANDROID_SDK_ROOT.
+function Get-SdkDirs {
+    $dirs = @()
     $localProps = Join-Path $repoRoot "local.properties"
     if (Test-Path $localProps) {
         $line = Get-Content $localProps | Where-Object { $_ -match '^\s*sdk\.dir\s*=' } | Select-Object -First 1
-        if ($line) {
-            $dir = (($line -replace '^\s*sdk\.dir\s*=\s*', '') -replace '\\(.)', '$1').Trim()
-            if (Test-Path $dir) { return $dir }
-        }
+        if ($line) { $dirs += (($line -replace '^\s*sdk\.dir\s*=\s*', '') -replace '\\(.)', '$1').Trim() }
     }
-    Fail "Android SDK not found; set ANDROID_HOME or sdk.dir in local.properties"
+    $dirs += @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT)
+    return @($dirs | Where-Object { $_ -and (Test-Path $_) })
 }
 
-# apksigner from the newest build-tools that has one.
+# apksigner from the newest build-tools that has one, in the first SDK that has
+# any.
 function Get-Apksigner {
-    $buildTools = Join-Path (Get-SdkDir) "build-tools"
-    if (-not (Test-Path $buildTools)) { Fail "no build-tools under $buildTools; install them with the SDK manager" }
+    $sdks = Get-SdkDirs
+    if ($sdks.Count -eq 0) { Fail "Android SDK not found; set sdk.dir in local.properties or ANDROID_HOME" }
     $names = @("apksigner.bat", "apksigner")
-    $newest = Get-ChildItem $buildTools -Directory |
-        Where-Object { $dir = $_.FullName; @($names | Where-Object { Test-Path (Join-Path $dir $_) }).Count -gt 0 } |
-        Sort-Object { $v = $null; if ([version]::TryParse(($_.Name -replace '-.*$', ''), [ref]$v)) { $v } else { [version]"0.0" } } |
-        Select-Object -Last 1
-    if (-not $newest) { Fail "no apksigner in any build-tools under $buildTools" }
-    foreach ($name in $names) {
-        $path = Join-Path $newest.FullName $name
-        if (Test-Path $path) { return $path }
+    foreach ($sdk in $sdks) {
+        $buildTools = Join-Path $sdk "build-tools"
+        if (-not (Test-Path $buildTools)) { continue }
+        $newest = Get-ChildItem $buildTools -Directory |
+            Where-Object { $dir = $_.FullName; @($names | Where-Object { Test-Path (Join-Path $dir $_) }).Count -gt 0 } |
+            Sort-Object { $v = $null; if ([version]::TryParse(($_.Name -replace '-.*$', ''), [ref]$v)) { $v } else { [version]"0.0" } } |
+            Select-Object -Last 1
+        if (-not $newest) { continue }
+        foreach ($name in $names) {
+            $path = Join-Path $newest.FullName $name
+            if (Test-Path $path) { return $path }
+        }
     }
+    Fail "no apksigner in the build-tools of $($sdks -join ', '); install build-tools with the SDK manager"
 }
 
 # Refuses (exits 1) unless $apk verifies and has exactly one signer whose

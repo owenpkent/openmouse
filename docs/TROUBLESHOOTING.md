@@ -113,8 +113,9 @@ starts; it does not wait for the mouse. If there is none at all:
   (`SOURCE_MOUSE`). Most USB and Bluetooth mice and many trackballs do; some
   touchpads, air mice and game controllers do not. `adb shell dumpsys input`
   lists each device's sources.
-- Check the connection: on most phones a connected mouse shows the system
-  pointer.
+- Check the connection. On Android 14+ a connected mouse also shows the system
+  pointer under the cross-hair; on Android 13 and older OpenMouse hides it, so
+  try the mouse with the service off.
 - **Android 13 and older, after a rest:** when the mouse has been still for more
   than 6 seconds, OpenMouse hands the screen back to the finger (see below) and
   looks for the mouse again for 0.3 seconds every 2.5 seconds. The first move
@@ -131,6 +132,8 @@ starts; it does not wait for the mouse. If there is none at all:
   default); after a physical click, a menu choice, a rotation or any settings
   change it must move past the **movement tolerance** (8 dp by default). This
   is what stops a resting or shaky hand from clicking the same spot again.
+  Two exceptions: **Scroll** mode repeats in place without a move, and moving
+  onto a menu entry starts its countdown at once.
 - A menu entry fires once per visit: resting on it longer, or a tremor inside
   the cell, does nothing until the pointer leaves the cell and comes back.
 
@@ -151,17 +154,22 @@ orientation, and whether split screen or a second display is in use.
 ### The touchscreen does nothing (Android 13 and older)
 
 On these versions the overlay has to take touches to see the mouse, and it
-ignores finger touches rather than passing them on. OpenMouse never leaves the
-finger locked out for long:
+ignores finger touches rather than passing them on. When the mouse is idle,
+OpenMouse hands the screen back to the finger:
 
-- **Mouse idle:** after more than 6 seconds without mouse input, the next check
-  (every 2.5 seconds) makes the screen touch-through. Expect the finger to work
-  again within about 9 seconds of letting go of the mouse. While it waits for
-  the mouse to come back, a finger tap can still be swallowed during the 0.3
-  second look every 2.5 seconds; tap again.
-- **Stuck gesture:** each injected tap or gesture passes touches through to the
-  app while it runs. If Android never reports a gesture finished, OpenMouse
-  takes the screen back after 1.5 seconds anyway.
+- After more than 6 seconds without mouse input, the next check (every 2.5
+  seconds) makes the screen touch-through. Expect the finger to work again
+  within about 9 seconds of letting go of the mouse.
+- While it waits for the mouse to come back, a finger tap can still be
+  swallowed during the 0.3 second look every 2.5 seconds; tap again.
+- **Except in Scroll mode:** a resting pointer keeps scrolling, and each scroll
+  takes the screen back from the finger until the next check, so the finger
+  stays mostly blocked. Move the mouse and pick **Pause** or another
+  mode, or turn the service off.
+
+(Each injected tap or gesture passes touches through to the app while it runs;
+if Android never reports one finished, OpenMouse takes the screen back after
+1.5 seconds so the cursor cannot freeze.)
 
 If the screen still will not respond, turn off **OpenMouse cursor** in
 Accessibility settings (with the mouse, or with the finger once it works). Most
@@ -176,25 +184,30 @@ OpenMouse does not notice a disconnect; to it, the mouse is simply resting.
 
 - The cross-hair stays where it was. A countdown already running finishes and
   clicks there once.
-- In **Scroll** mode a resting pointer scrolls once per dwell period, so it
-  keeps scrolling until the mouse moves again. Pick **Pause** or another mode
+- In **Scroll** mode a resting pointer keeps scrolling on its own until the
+  mouse moves again. Pick **Pause** or another mode
   before unplugging, or turn the service off.
 - A Drag or Swipe whose start point was marked stays pending; the next click
   after reconnecting finishes it from the old start. Choosing any menu entry
   cancels it.
-- On Android 13 and older the touchscreen comes back as described above.
+- On Android 13 and older the touchscreen comes back as described above,
+  except in Scroll mode.
 
 ## Updating
 
-Sideload builds have **Settings > Updates** with "Check for updates now" and an
-option to check when OpenMouse opens. It talks only to GitHub, and only when one
-of those asks. F-Droid builds leave the updater out and update through F-Droid.
+Sideload builds that include the in-app updater (it is not in v0.1.0) have
+**Settings > Updates** with "Check for updates now" and an option to check when
+OpenMouse opens. It talks only to GitHub, and only when one of those asks.
+F-Droid builds leave the updater out and update through F-Droid. Without the
+updater, download the new `openmouse-vX.Y.Z.apk` from Releases and install it
+over the old one.
 
 | Message | Meaning | What to do |
 | --- | --- | --- |
 | You have the latest version (X) | The newest GitHub release is not newer than the installed `versionName`. | Nothing. |
 | Version X is available | A newer release with an APK was found. | Tap **Download and install**. |
-| Could not check for updates: no release found | No published release, or the latest one is a draft or prerelease, is not tagged `vX.Y.Z`, or has no `openmouse-*.apk` asset. | Try later; if it persists, report it. |
+| Could not check for updates: no release found | The latest release is not tagged `vX.Y.Z` or has no `openmouse-*.apk` asset. | Try later; if it persists, report it. |
+| Could not check for updates: HTTP 404 | GitHub has no published release (drafts and prereleases do not count). | Nothing to install yet. |
 | Could not check for updates: HTTP 403 (or another HTTP code) | GitHub refused the request. 403 is usually its hourly limit for unauthenticated requests from one network. | Wait an hour and retry. |
 | Could not check for updates: (a network error, timeout) | No connection, or GitHub took more than 10 seconds. | Check the connection and retry. |
 | Could not check for updates: the download is not hosted on GitHub | The release asset pointed (or redirected) somewhere other than this repository's GitHub downloads. Refused before downloading. | Do not install it by hand; report it. |

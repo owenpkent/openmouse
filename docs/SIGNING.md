@@ -142,8 +142,9 @@ switching between them means uninstalling first (losing the settings):
   so an F-Droid install and a GitHub install can never update each other. F-Droid
   builds also compile the in-app updater out (`-PopenmouseUpdater=false`) and
   update through the F-Droid client.
-- **The in-app updater** (sideload builds) checks before installing that the
-  downloaded APK has the same package name and exactly the same signing
+- **The in-app updater** (in sideload builds that include it) checks before
+  installing that the downloaded APK has the same package name and exactly the
+  same signing
   certificates as the running app. A mismatch shows "The downloaded file is not
   signed by the same key as this app; not installing" instead of handing it to
   the installer.

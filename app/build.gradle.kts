@@ -100,7 +100,8 @@ val copyDebugApkToRoot = tasks.register<Copy>("copyDebugApkToRoot") {
 
 // Hooked to packageDebug, which writes the APK and which both assembleDebug and
 // installDebug run through, so either entry point refreshes the copy.
-tasks.matching { it.name == "packageDebug" }.configureEach {
+// named { } (not matching { }) keeps every other task unrealized.
+tasks.named { it == "packageDebug" }.configureEach {
     finalizedBy(copyDebugApkToRoot)
 }
 
