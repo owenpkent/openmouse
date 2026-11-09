@@ -6,6 +6,7 @@ import io.github.owenpkent.openmouse.click.DwellMachine
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import kotlin.math.hypot
 
 /**
  * Jazzer fuzz target for the dwell state machine, the OpenMouse counterpart of
@@ -26,6 +27,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
  * - the same rest never fires twice without a move or an in-place re-arm;
  * - a keyed target the machine locked on (by firing or by an explicit lock)
  *   never fires again while every move since has kept that key;
+ * - nothing fires while every move since the last lock-like event has stayed
+ *   within the movement tolerance of the lock anchor (a tremor, whatever the
+ *   keys it crosses), unless re-armed in place;
  * - while paused, a rest over the app (null key) never fires;
  * - while a mouse button is held, nothing fires and no progress is reported,
  *   however the pointer moves;
@@ -42,9 +46,10 @@ class DwellMachineFuzzTest {
 
     @FuzzTest(maxDuration = "10m")
     fun arbitraryEventSequenceKeepsInvariants(data: FuzzedDataProvider) {
+        var moveThresholdPx = data.consumeFloat()
         val machine = DwellMachine(
             dwellTimeMs = data.consumeLong(),
-            moveThresholdPx = data.consumeFloat(),
+            moveThresholdPx = moveThresholdPx,
             postActionThresholdPx = data.consumeFloat(),
             repeatIntervalMs = data.consumeLong(),
         )
@@ -62,9 +67,20 @@ class DwellMachineFuzzTest {
         // every move since has kept that key: it must not fire again.
         var parkedOnLockedKey = false
         var lockedKey: Any? = null
+        // Where the machine last locked, and whether every move since has stayed
+        // within the movement tolerance of it: such moves are tremor and must not
+        // arm anything, whatever keys they cross. The same expression as the
+        // machine's own so NaN and infinite positions read alike (not moved).
+        var lockX = 0f
+        var lockY = 0f
+        var withinLockTolerance = true
+        fun tolerance(): Float = if (moveThresholdPx >= 0f) moveThresholdPx else 0f
         fun noteLock() {
             parkedOnLockedKey = lastKey != null
             lockedKey = lastKey
+            lockX = lastX
+            lockY = lastY
+            withinLockTolerance = true
         }
         var lastProgress = 0f
         var lastPollNow = Long.MIN_VALUE
@@ -97,6 +113,9 @@ class DwellMachineFuzzTest {
                     clickedThisRest = false
                     haveLastPoll = false
                     if (lastKey != lockedKey) parkedOnLockedKey = false
+                    if (hypot((lastX - lockX).toDouble(), (lastY - lockY).toDouble()) > tolerance()) {
+                        withinLockTolerance = false
+                    }
                 }
 
                 4 -> {
@@ -122,7 +141,8 @@ class DwellMachineFuzzTest {
 
                 7 -> {
                     // Mirrors DwellClicker.configure: new values, then lock.
-                    machine.configure(data.consumeLong(), data.consumeFloat(), data.consumeFloat(), data.consumeLong())
+                    moveThresholdPx = data.consumeFloat()
+                    machine.configure(data.consumeLong(), moveThresholdPx, data.consumeFloat(), data.consumeLong())
                     machine.lockUntilMove()
                     armedSinceLock = false
                     haveLastPoll = false
@@ -162,6 +182,7 @@ class DwellMachineFuzzTest {
                     clickedThisRest = false
                     haveLastPoll = false
                     parkedOnLockedKey = false // an explicit request to fire again in place
+                    withinLockTolerance = false
                 }
 
                 else -> {
@@ -195,6 +216,7 @@ class DwellMachineFuzzTest {
                         assertFalse(paused && lastKey == null, "fired over the app while paused")
                         assertFalse(held, "fired while a mouse button was held")
                         assertFalse(parkedOnLockedKey, "keyed target $lastKey re-fired without the pointer leaving it")
+                        assertFalse(withinLockTolerance, "fired after moves that all stayed within the lock's tolerance")
                         clickedThisRest = true
                         haveLastPoll = false
                         noteLock() // a firing poll locks on the current key

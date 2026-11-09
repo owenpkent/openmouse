@@ -145,14 +145,23 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 - **Rest keys.** On every move the service hands the machine the menu entry under
   the cursor (or null over the app). While that key is unchanged the entry itself
   is the tolerance: a tremor inside a menu cell, however large, neither restarts
-  the countdown nor re-fires the entry. Entering a cell starts its countdown at
-  once. Leaving a cell for the app locks and the ordinary distance applies from
-  the rest point, so a slip into the gap between cells, or a menu that re-lays
-  out under a still pointer (the strip shifts on short screens), never taps the
-  app. After a menu choice, a dock change, or a resize (`CursorView` reports
-  every re-layout), the service re-feeds the entry now under the pointer before
-  locking, for the same reason. This is the PowerToys toolbar rule ("an
-  activated button will not fire again until the pointer leaves it").
+  the countdown nor re-fires the entry. Entering a cell while a countdown is
+  running starts the cell's countdown at once: the cell edge is the deliberate
+  act.
+  Entering one while the machine is locked is not enough on its own; the pointer
+  must also clear the lock's tolerance from the lock anchor, since a lock is
+  cleared by deliberate movement and nothing else. That is what keeps a tremor
+  across a cell edge from selecting the neighbour after a menu choice, and what
+  keeps the dock from selecting a cell it laid out beside a still pointer when
+  it opened (the collapsed handle is taller than a cell, so opening it can leave
+  the pointer in a gap with cells 1 px away). Leaving a cell for the app locks
+  and the ordinary distance applies from the rest point, so a slip into the gap
+  between cells, or a menu that re-lays out under a still pointer (the strip
+  shifts on short screens), never taps the app. After a menu choice, a dock
+  change, or a resize (`CursorView` reports every re-layout), the service
+  re-feeds the entry now under the pointer before locking, for the same reason.
+  This is the PowerToys toolbar rule ("an activated button will not fire again
+  until the pointer leaves it").
 - **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
   not on the menu, so a user who cannot click can still reach Resume. It locks in
   both directions, so time spent paused never counts toward a countdown. The
@@ -222,15 +231,17 @@ dispatches directly on the modern path and does the legacy passthrough dance on
 API 24-33, including resending a gesture the overlay swallowed (see "Legacy
 path" above).
 
-The strip is laid out by the pure `MenuGeometry`: a grid whose toggle is
-anchored at its collapsed center (so it does not jump when the grid expands)
-and clamped to stay on screen on short/landscape displays. The grid is two
-columns wide on a tall screen; when the expanded strip would still run off a
+The strip is a dock flush with one screen edge, laid out by the pure
+`MenuGeometry`: square glyph cells (symbols, not words, so they stay small and
+need no translation) under a toggle that is anchored at its collapsed center
+(so it does not jump when the grid expands) and clamped to stay on screen on
+short/landscape displays. The grid is two columns wide on a tall screen; when the expanded strip would still run off a
 short one (a phone in landscape) it widens a column at a time until it fits or
 the screen width runs out, so the last row, Pause / Resume, stays reachable
-however the device is held. While collapsed, only the toggle is a hit target,
-so the rest of the screen clicks through; the left/right dock setting moves it
-off a busy edge.
+however the device is held. While collapsed, only a slim handle on the edge is
+a hit target (the screen edge stops the pointer, so a narrow target there is
+easy to hit with a mouse) and the rest of the screen clicks through; the
+left/right dock setting moves it off a busy edge.
 
 ### One-shot vs sticky modes
 

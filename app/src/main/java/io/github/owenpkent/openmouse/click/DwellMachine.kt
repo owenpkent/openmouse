@@ -31,10 +31,14 @@ import kotlin.math.hypot
  *   pointer (the service passes the menu cell, or null over the app). While the
  *   key is unchanged the target itself is the tolerance: jitter inside a menu
  *   cell never restarts or re-arms, however large, and only leaving the cell
- *   does. Entering a cell starts its countdown at once; leaving a cell for the
- *   app locks, and the ordinary distance from the rest point applies again.
- *   This is what stops a parked pointer from firing the same menu entry every
- *   dwell period, and a slip off a cell from tapping the app beside it.
+ *   does. Entering a cell while a countdown is running starts the cell's
+ *   countdown at once (the cell edge is the deliberate act); entering one while locked
+ *   counts only once the pointer has cleared the lock's tolerance, because a
+ *   lock is cleared by deliberate movement and nothing else. Leaving a cell
+ *   for the app locks, and the ordinary distance from the rest point applies
+ *   again. This is what stops a parked pointer from firing the same menu entry
+ *   every dwell period, a slip off a cell from tapping the app beside it, and a
+ *   tremor across a cell edge from selecting the neighbour.
  * - **A held button suppresses dwelling** ([setExternalButtonHeld]) for the
  *   whole hold, whatever the pointer does: a dwell must never cut short the
  *   user's own drag or selection. Letting go locks until the pointer moves, so
@@ -168,10 +172,17 @@ class DwellMachine(
 
         val keyChanged = restKey != anchorKey
 
-        // Entering a keyed target (a menu cell) starts its countdown at once,
-        // whatever the distance: the cell edge is the deliberate act.
+        // Entering a keyed target (a menu cell) during a countdown hands the
+        // countdown to the cell at once, whatever the distance: the cell edge is
+        // the deliberate act. A locked machine is stricter. Its lock is cleared
+        // only by deliberate movement, so a cell reached within the lock's
+        // tolerance (a tremor across a cell edge after a menu choice, or a cell
+        // the dock laid out next to a still pointer when it opened) is not
+        // entered until the pointer has travelled that distance from the lock
+        // anchor. Without this, opening the dock over what becomes a gap and
+        // jittering 1 px into the neighbouring cell would select it.
         if (keyChanged && restKey != null) {
-            startCountdown(x, y, restKey, nowMs)
+            if (!locked || movedFromAnchor(x, y)) startCountdown(x, y, restKey, nowMs)
             return
         }
 
@@ -194,13 +205,16 @@ class DwellMachine(
         // countdown nor re-fire an entry the pointer never left.
         if (restKey != null) return
 
-        // A post-action lock uses the wider re-arm distance; every other lock
-        // (startup, settings change, physical click, pause) and a running
-        // countdown use the ordinary tolerance. Strictly greater: a move of
-        // exactly the threshold still counts as resting.
+        if (movedFromAnchor(x, y)) startCountdown(x, y, restKey, nowMs)
+    }
+
+    // A post-action lock uses the wider re-arm distance; every other lock
+    // (startup, settings change, physical click, pause) and a running countdown
+    // use the ordinary tolerance. Strictly greater: a move of exactly the
+    // threshold still counts as resting.
+    private fun movedFromAnchor(x: Float, y: Float): Boolean {
         val threshold = if (locked && lockedAfterAction) effectivePostActionThresholdPx() else moveThresholdPx
-        val moved = hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > threshold
-        if (moved) startCountdown(x, y, restKey, nowMs)
+        return hypot((x - anchorX).toDouble(), (y - anchorY).toDouble()) > threshold
     }
 
     // The re-arm distance exists to be wider than the movement tolerance; a value
@@ -211,7 +225,7 @@ class DwellMachine(
     /**
      * Lock at the current position with the ordinary tolerance: a physical click,
      * a menu choice, a settings change. The next move past [moveThresholdPx]
-     * (or into a different target) re-arms it.
+     * re-arms it, whichever target it lands on.
      */
     fun lockUntilMove() {
         locked = true

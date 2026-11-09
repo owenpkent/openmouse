@@ -90,6 +90,11 @@ Two traps: always get `UiAutomation` with `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERV
 included; use `Device.shell()`), and do not use Espresso clicks while the overlay
 is up on API 24-33, where it is touchable until its idle watchdog fires.
 
+To record demo clips with a real mouse pipeline (no recorder Activity), give
+the emulator a virtual mouse with [`tools/uimouse/`](tools/uimouse/README.md):
+a uinput device on a rooted Google APIs image, driven from the host by
+screenshots. The clips under `docs/media/` were recorded that way.
+
 ## Project shape
 
 Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first. The short version:
@@ -143,9 +148,9 @@ Branch protection on `main` requires `Tests`, the `Reviewed` status, and the
 Most new gestures follow the same path:
 
 1. Add a value to `GestureAction` (in `menu/GestureMenu.kt`).
-2. Add a label string in `res/values/strings.xml` and a row in `GestureMenu`'s
-   `items` list. The grid resizes itself via `MenuGeometry` (two columns,
-   more on a short screen).
+2. Add it to `GestureMenu`'s `items` list and draw its symbol in `drawGlyph`
+   (the dock shows glyphs, not words). The grid resizes itself via
+   `MenuGeometry` (two columns, more on a short screen).
 3. Add the injection method to `GestureDispatcher`: it builds and returns an
    `Injection` (the `GestureDescription` plus each stroke's start point, in
    stroke order). Use existing methods as a template. The start points must be

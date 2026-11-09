@@ -22,14 +22,16 @@ class MenuGeometryTest {
         minColumns = 2,
     )
 
-    /** The production menu at density 1: 13 entries (Pause last), 84 x 52 dp cells. */
+    /** The production dock at density 1: 13 glyph cells (Pause last), 48 dp square, flush with the edge. */
     private fun productionGeometry() = MenuGeometry(
         itemCount = 13,
-        itemW = 84f,
-        itemH = 52f,
-        gap = 6f,
-        margin = 8f,
+        itemW = 48f,
+        itemH = 48f,
+        gap = 4f,
+        margin = 0f,
         minColumns = 2,
+        handleW = 22f,
+        handleH = 96f,
     )
 
     @Nested
@@ -108,37 +110,37 @@ class MenuGeometryTest {
             val g = productionGeometry()
             g.layout(400, 800, expanded = true)
             assertEquals(2, g.columns)
-            assertEquals(174f, g.panelWidth, EPS) // 2*84 + 6
-            // 7 rows: toggle 52 + 6 + 7*52 + 6*6 = 458, fits in 800 without a shift.
-            assertEquals(458f, g.item(12).bottom - g.toggle.top, EPS)
+            assertEquals(100f, g.panelWidth, EPS) // 2*48 + 4
+            // 7 rows: toggle 48 + 4 + 7*48 + 6*4 = 412, fits in 800 without a shift.
+            assertEquals(412f, g.item(12).bottom - g.toggle.top, EPS)
         }
 
         @Test
         fun landscapeWidensTheGridSoTheLastEntryStaysOnScreen() {
-            // 800 x 400 dp landscape: two columns would put Pause at y 406..458,
-            // entirely below the screen. Three columns make 5 rows (342 tall).
+            // 800 x 400 dp landscape: two columns (412 tall) would put Pause
+            // below the screen. Three columns make 5 rows (308 tall).
             val g = productionGeometry()
             g.layout(800, 400, expanded = true)
             assertEquals(3, g.columns)
-            assertEquals(264f, g.panelWidth, EPS) // 3*84 + 2*6
+            assertEquals(152f, g.panelWidth, EPS) // 3*48 + 2*4
             assertFullyOnScreen(g, 800, 400, itemCount = 13)
             assertNoOverlap(g, 13)
-            // The widened strip is still docked to the right edge.
-            assertEquals(792f, g.toggle.right, EPS)
+            // The widened strip is still flush with the right edge.
+            assertEquals(800f, g.toggle.right, EPS)
             assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(700f, g.toggle.top + 1f, expanded = true))
         }
 
         @Test
         fun pauseKeepsAFullHitTargetAfterPortraitToLandscape() {
             // A paused user rotates: the Resume entry (index 12) must keep its
-            // whole 84 x 52 target reachable on the shorter layout.
+            // whole 48 x 48 target reachable on the shorter layout.
             val g = productionGeometry()
             g.layout(400, 800, expanded = true)
             assertFullyOnScreen(g, 400, 800, itemCount = 13)
             g.layout(800, 400, expanded = true)
             val pause = g.item(12)
-            assertEquals(84f, pause.right - pause.left, EPS)
-            assertEquals(52f, pause.bottom - pause.top, EPS)
+            assertEquals(48f, pause.right - pause.left, EPS)
+            assertEquals(48f, pause.bottom - pause.top, EPS)
             assertTrue(pause.bottom <= 400f, "Pause runs off the bottom: $pause")
             assertEquals(12, g.hitTest(pause.left + 1f, pause.top + 1f, expanded = true))
             assertEquals(12, g.hitTest(pause.right - 1f, pause.bottom - 1f, expanded = true))
@@ -146,7 +148,7 @@ class MenuGeometryTest {
 
         @Test
         fun veryShortScreenKeepsWideningUntilItFits() {
-            // 360 dp tall: 3 columns (342) fit. 300 dp tall: 4 columns (284).
+            // 360 dp tall: 3 columns (308) fit. 300 dp tall: 4 columns (256).
             val g = productionGeometry()
             g.layout(800, 360, expanded = true)
             assertEquals(3, g.columns)
@@ -158,27 +160,50 @@ class MenuGeometryTest {
 
         @Test
         fun wideningStopsAtTheScreenWidth() {
-            // 300 x 300: 3 columns are 264 wide and fit in 300 - 16; 4 would be
-            // 354. The grid cannot fit the height, so it clamps to the top instead.
+            // 160 x 300: 3 columns are 152 wide and fit; 4 would be 204. The
+            // grid (308) cannot fit the height, so it clamps to the top instead.
             val g = productionGeometry()
-            g.layout(300, 300, expanded = true)
+            g.layout(160, 300, expanded = true)
             assertEquals(3, g.columns)
             assertEquals(0f, g.toggle.top, EPS)
         }
 
         @Test
-        fun collapsedUsesTheSameWidthAsExpanded() {
-            // The column count comes from the expanded strip even while
-            // collapsed, so the toggle keeps one width and one horizontal place
-            // when the grid opens (it still shifts up to fit, as always).
+        fun collapsedIsASlimHandleFlushWithTheEdge() {
+            // Collapsed, only a 22 x 96 handle remains, centered on the toggle
+            // row's vertical center and flush with the right edge.
             val g = productionGeometry()
             g.layout(800, 400, expanded = false)
-            val collapsed = g.toggle
-            assertEquals(3, g.columns)
-            assertEquals(174f, collapsed.top, EPS) // centered: (400 - 52) / 2
+            assertEquals(3, g.columns) // the column count still comes from the expanded strip
+            assertBounds(g.toggle, 778f, 152f, 800f, 248f) // center y 200
+            assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(799f, 200f, expanded = false))
+            assertNull(g.hitTest(770f, 200f, expanded = false)) // just inboard of the handle: the app
+            // Opening widens the toggle to the panel; on this short screen the
+            // whole strip (308 tall) also shifts up to fit, as it always has.
             g.layout(800, 400, expanded = true)
-            assertEquals(collapsed.left, g.toggle.left, EPS)
-            assertEquals(collapsed.right, g.toggle.right, EPS)
+            assertEquals(648f, g.toggle.left, EPS)
+            assertEquals(800f, g.toggle.right, EPS)
+            assertEquals(92f, g.toggle.top, EPS) // 400 - 308
+            // On a tall screen nothing shifts: the row is 48 tall around the handle's center.
+            g.layout(400, 800, expanded = false)
+            val handleCenter = (g.toggle.top + g.toggle.bottom) / 2f
+            g.layout(400, 800, expanded = true)
+            assertEquals(handleCenter, (g.toggle.top + g.toggle.bottom) / 2f, EPS)
+        }
+
+        @Test
+        fun leftDockHandleIsFlushWithTheLeftEdge() {
+            val g = productionGeometry()
+            g.layout(800, 400, expanded = false, dockRight = false)
+            assertBounds(g.toggle, 0f, 152f, 22f, 248f)
+        }
+
+        @Test
+        fun withoutAHandleTheCollapsedToggleIsTheFullRow() {
+            // The default keeps the old behaviour for callers that want it.
+            val g = geometry()
+            g.layout(1000, 1000, expanded = false)
+            assertBounds(g.toggle, 820f, 475f, 990f, 525f)
         }
 
         @Test
@@ -186,8 +211,8 @@ class MenuGeometryTest {
             val g = productionGeometry()
             g.layout(800, 400, expanded = true, dockRight = false)
             assertEquals(3, g.columns)
-            assertEquals(8f, g.toggle.left, EPS)
-            assertEquals(272f, g.toggle.right, EPS)
+            assertEquals(0f, g.toggle.left, EPS)
+            assertEquals(152f, g.toggle.right, EPS)
             assertFullyOnScreen(g, 800, 400, itemCount = 13)
         }
 

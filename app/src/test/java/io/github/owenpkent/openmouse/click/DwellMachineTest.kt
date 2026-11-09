@@ -845,14 +845,65 @@ class DwellMachineTest {
     inner class RestKeys {
 
         @Test
-        fun enteringATargetStartsItsCountdownEvenWithoutDistance() {
+        fun enteringATargetDuringACountdownStartsItsCountdownEvenWithoutDistance() {
             val m = machine()
-            arm(m)
-            m.lockUntilMove()
-            // 2 px, far under the tolerance, but into a different target.
+            arm(m) // a countdown is running over the app
+            // 2 px, far under the tolerance, but into a different target: the
+            // cell edge hands the countdown to the cell.
             m.onMove(102f, 100f, 50L, restKey = "back")
             assertFalse(m.poll(100L).clicked)
             assertTrue(m.poll(150L).clicked)
+        }
+
+        @Test
+        fun enteringATargetWhileLockedNeedsTheToleranceCleared() {
+            val m = machine() // 10 px tolerance
+            arm(m)
+            m.lockUntilMove() // a physical click, or a lock the service placed after a re-layout
+            // 2 px into a target is a tremor, not an act: still locked.
+            m.onMove(102f, 100f, 50L, restKey = "back")
+            assertFalse(m.poll(10_000L).clicked)
+            assertEquals(0f, m.poll(10_000L).progress, EPS)
+            // Jitter inside that target, still within the lock's tolerance: locked.
+            m.onMove(100f, 108f, 10_000L, restKey = "back")
+            assertFalse(m.poll(20_000L).clicked)
+            // Past the tolerance from the lock anchor the entry arms.
+            m.onMove(100f, 111f, 20_000L, restKey = "back")
+            assertFalse(m.poll(20_050L).clicked)
+            assertTrue(m.poll(20_100L).clicked)
+        }
+
+        @Test
+        fun aTremorAcrossACellEdgeAfterAMenuChoiceDoesNotSelectTheNeighbour() {
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "tap")
+            assertTrue(m.poll(100L).clicked)
+            m.lockUntilMove() // menu choice
+            // 1 px over the cell edge into the next cell, then back.
+            m.onMove(101f, 100f, 200L, restKey = "double-tap")
+            assertFalse(m.poll(10_000L).clicked)
+            m.onMove(100f, 100f, 10_000L, restKey = "tap")
+            assertFalse(m.poll(20_000L).clicked)
+            // A deliberate move into the neighbour arms it.
+            m.onMove(140f, 100f, 20_000L, restKey = "double-tap")
+            assertTrue(m.poll(20_100L).clicked)
+        }
+
+        @Test
+        fun aCellTheDockPlacesNextToAStillPointerIsNotEnteredByATremor() {
+            // The dock shape: the dwell on the collapsed handle fires, the dock
+            // expands, and the service re-feeds what is now under the pointer (a
+            // gap: null) and locks. The pointer then shakes 1 px into a cell.
+            val m = machine()
+            m.reset(0L)
+            m.onMove(100f, 100f, 0L, restKey = "toggle")
+            assertTrue(m.poll(100L).clicked)
+            m.onMove(100f, 100f, 100L, restKey = null) // resync: the handle became a gap
+            m.lockUntilMove()
+            m.onMove(100f, 101f, 200L, restKey = "home")
+            assertFalse(m.poll(10_000L).clicked)
+            assertEquals(0f, m.poll(10_000L).progress, EPS)
         }
 
         @Test

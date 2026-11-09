@@ -8,12 +8,16 @@ data class Bounds(val left: Float, val top: Float, val right: Float, val bottom:
 /**
  * Pure layout and hit-testing for the gesture menu, with no Android dependencies.
  *
- * The menu is a vertical strip docked to the right edge: a full-width toggle row
- * on top, then a grid of [itemCount] entries below it when expanded. The grid is
+ * The menu is a vertical strip docked to the right edge. Collapsed, it is only
+ * a slim **handle** ([handleW] x [handleH]) flush with the edge, so it covers
+ * almost nothing; the screen edge stops the pointer, which makes a narrow
+ * target there easy to reach with a mouse. Expanded, the toggle becomes a
+ * full-width row with a grid of [itemCount] entries below it. The grid is
  * [minColumns] wide on a tall screen; on a short one it widens, one column at a
  * time, until the expanded strip fits the height or the screen width runs out,
  * so the last entries (Pause / Resume among them) stay reachable in landscape.
- * The whole strip is centered vertically.
+ * The whole strip is centered vertically, and the toggle keeps its vertical
+ * center across the two states.
  *
  * Degenerate construction values are clamped rather than trusted (a negative
  * item count becomes 0, fewer than one column becomes 1), so the layout is
@@ -26,9 +30,16 @@ class MenuGeometry(
     private val gap: Float,
     private val margin: Float,
     minColumns: Int = 2,
+    handleW: Float? = null,
+    handleH: Float? = null,
 ) {
     private val itemCount = itemCount.coerceAtLeast(0)
     private val minColumns = minColumns.coerceAtLeast(1)
+
+    // The collapsed toggle. Defaults to the full toggle row, so a caller that
+    // wants no distinct handle gets the old behaviour.
+    private val handleW: Float? = handleW
+    private val handleH: Float = handleH ?: itemH
 
     /** The toggle (hamburger) row. Valid after [layout]. */
     var toggle: Bounds = Bounds(0f, 0f, 0f, 0f)
@@ -68,8 +79,18 @@ class MenuGeometry(
         if (top > maxTop) top = maxTop
         if (top < 0f) top = 0f
 
+        if (!expanded) {
+            // The handle sits at the edge, sharing the toggle row's vertical center.
+            val hw = handleW ?: panelWidth
+            val hTop = top + (itemH - handleH) / 2f
+            toggle = if (dockRight) {
+                Bounds(right - hw, hTop, right, hTop + handleH)
+            } else {
+                Bounds(left, hTop, left + hw, hTop + handleH)
+            }
+            return
+        }
         toggle = Bounds(left, top, right, top + itemH)
-        if (!expanded) return
 
         val gridTop = top + itemH + gap
         for (i in 0 until itemCount) {
