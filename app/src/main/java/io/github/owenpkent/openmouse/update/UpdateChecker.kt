@@ -19,7 +19,9 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 
 /**
@@ -58,7 +60,6 @@ class UpdateChecker(context: Context) {
     }
 
     private val context = context.applicationContext
-    private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** The APK lands here; `res/xml/file_paths.xml` exposes this folder to the installer. */
@@ -312,6 +313,21 @@ class UpdateChecker(context: Context) {
     }
 
     companion object {
+        /**
+         * One worker for the whole process, shared by every checker (the launch
+         * check and each Settings screen create their own). Its single daemon
+         * thread exits after [IDLE_TIMEOUT_S] idle, so nothing lingers between
+         * checks and nothing is left to shut down when an activity goes away.
+         * Work is serialized, which also keeps two downloads from writing
+         * [updateFile] at once. Results still go through each activity's
+         * liveness check (`UpdatePrompt.shouldDeliver`), so a task that
+         * outlives its screen is simply dropped.
+         */
+        private val executor = ThreadPoolExecutor(1, 1, IDLE_TIMEOUT_S, TimeUnit.SECONDS, LinkedBlockingQueue()) { task ->
+            Thread(task, "openmouse-update").apply { isDaemon = true }
+        }.apply { allowCoreThreadTimeOut(true) }
+
+        private const val IDLE_TIMEOUT_S = 30L
         private const val UPDATE_DIR = "updates"
         private const val UPDATE_FILE = "openmouse-update.apk"
         private const val APK_MIME = "application/vnd.android.package-archive"
