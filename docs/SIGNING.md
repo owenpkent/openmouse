@@ -150,5 +150,6 @@ switching between them means uninstalling first (losing the settings):
   the installer.
 
 Never attach a debug APK (from `apks/` or `app/build/outputs/`) to a GitHub
-Release: the updater picks the release's `openmouse-*.apk` asset, and a
-debug-signed one would fail that check for every user.
+Release. The updater only ever offers the asset named for the tag,
+`openmouse-vX.Y.Z.apk`, so a stray debug APK is ignored, but sideloaders reading
+the release page could still pick it and then be unable to update.

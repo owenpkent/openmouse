@@ -38,13 +38,14 @@ object ReleaseFeed {
 
     private val RELEASE_TAG = Regex("^v\\d+\\.\\d+\\.\\d+$")
     private val VERSION = Regex("^\\d+(\\.\\d+)*$")
-    private val APK_ASSET = Regex("^openmouse-.*\\.apk$")
 
     /**
      * Parses a `releases/latest` JSON payload. Returns null for anything the
      * updater must not offer: a draft or prerelease, a tag that is not a plain
-     * `vX.Y.Z`, a release with no `openmouse-*.apk` asset, or a body that is not
-     * valid JSON at all. Never throws.
+     * `vX.Y.Z`, a release with no asset named exactly `openmouse-<tag>.apk` (what
+     * `scripts/publish-release.ps1` uploads; a debug or otherwise stray APK on the
+     * release is never offered), or a body that is not valid JSON at all.
+     * Never throws.
      */
     fun parse(json: String): Release? {
         return try {
@@ -57,7 +58,7 @@ object ReleaseFeed {
             for (i in 0 until assets.length()) {
                 val asset = assets.optJSONObject(i) ?: continue
                 val name = asset.optString("name", "")
-                if (!APK_ASSET.matches(name)) continue
+                if (name != "openmouse-$tag.apk") continue
                 val url = asset.optString("browser_download_url", "")
                 if (url.isEmpty()) return null
                 return Release(

@@ -204,14 +204,23 @@ Write-Host "SHA-256: $sha"
 # --- 4. The GitHub Release ---------------------------------------------------
 # The tag message is the release notes, so the same text reaches people reading
 # GitHub, the in-app updater, and anyone who verifies the tag.
+# %(contents) is the whole tag message with the SSH signature block on the end
+# (git 2.53 checked); verify-release-tag.sh has already required that block to
+# be the single trailing part, so the notes are everything before it. Written
+# without a BOM, which Windows PowerShell's Out-File -Encoding utf8 would add.
 $notesFile = Join-Path $distDir "openmouse-$tag.notes.md"
-git tag -l --format='%(contents)' $tag | Out-File -Encoding utf8 $notesFile
+$message = (git tag -l --format='%(contents)' $tag) -join "`n"
+$cut = $message.IndexOf("-----BEGIN SSH SIGNATURE-----")
+if ($cut -ge 0) { $message = $message.Substring(0, $cut) }
+$message = $message.TrimEnd()
+if (-not $message) { Fail "the tag message of $tag is empty; the release notes come from it" }
+[System.IO.File]::WriteAllText($notesFile, $message + "`n", (New-Object System.Text.UTF8Encoding($false)))
 
 gh release view $tag *> $null
 if ($LASTEXITCODE -eq 0) { Fail "a GitHub Release for $tag already exists; delete it or upload the asset with: gh release upload $tag $asset" }
 
-$args = @("release", "create", $tag, $asset, "$asset.sha256", "--verify-tag", "--title", "OpenMouse $version", "--notes-file", $notesFile)
-if ($Draft) { $args += "--draft" }
-& gh @args
+$ghArgs = @("release", "create", $tag, $asset, "$asset.sha256", "--verify-tag", "--title", "OpenMouse $version", "--notes-file", $notesFile)
+if ($Draft) { $ghArgs += "--draft" }
+& gh @ghArgs
 if ($LASTEXITCODE -ne 0) { Fail "gh release create failed" }
 Write-Host "Published $tag" -ForegroundColor Green

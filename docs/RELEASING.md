@@ -149,7 +149,7 @@ for every merged pull request, because each needs the owner's signature.
    `release-cert.sha256` ([SIGNING.md](SIGNING.md); `-CheckApk <apk>` runs just
    that check, for example on a downloaded asset). It writes `dist/openmouse-v0.2.0.apk` and
    its SHA-256, and creates the GitHub Release with the tag message as notes.
-   The in-app updater looks for the `openmouse-*.apk` asset of the latest
+   The in-app updater looks for the `openmouse-vX.Y.Z.apk` asset of the latest
    release, and Android installs it only over an app signed with the same key,
    so the keystore must be the one that signed what users have. Never attach a
    debug APK (such as the `apks/` copy) to a release. Users' install and update

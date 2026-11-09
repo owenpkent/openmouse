@@ -206,7 +206,7 @@ over the old one.
 | --- | --- | --- |
 | You have the latest version (X) | The newest GitHub release is not newer than the installed `versionName`. | Nothing. |
 | Version X is available | A newer release with an APK was found. | Tap **Download and install**. |
-| Could not check for updates: no release found | The latest release is not tagged `vX.Y.Z` or has no `openmouse-*.apk` asset. | Try later; if it persists, report it. |
+| Could not check for updates: no release found | The latest release is not tagged `vX.Y.Z` or has no `openmouse-vX.Y.Z.apk` asset named for that tag. | Try later; if it persists, report it. |
 | Could not check for updates: HTTP 404 | GitHub has no published release (drafts and prereleases do not count). | Nothing to install yet. |
 | Could not check for updates: HTTP 403 (or another HTTP code) | GitHub refused the request. 403 is usually its hourly limit for unauthenticated requests from one network. | Wait an hour and retry. |
 | Could not check for updates: (a network error, timeout) | No connection, or GitHub took more than 10 seconds. | Check the connection and retry. |

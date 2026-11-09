@@ -36,6 +36,10 @@ captures/
 *.keystore
 keystore.properties
 
+# Release output from scripts/publish-release.ps1 (APK, SHA-256, notes). Kept
+# out of git so a rerun after a failed or draft publish sees a clean tree.
+dist/
+
 # Logs
 *.log
 

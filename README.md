@@ -21,7 +21,7 @@ with or endorsed by Ease Apps.
 
 ## Install
 
-- **Direct APK:** download the latest `openmouse-*.apk` from the
+- **Direct APK:** download the latest `openmouse-vX.Y.Z.apk` from the
   [Releases](https://github.com/owenpkent/openmouse/releases) page and sideload it
   (Android 7.0+).
 - **F-Droid** and **Google Play**: planned; the metadata and submission guides are

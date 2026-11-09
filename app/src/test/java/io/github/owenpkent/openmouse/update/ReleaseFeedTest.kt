@@ -45,22 +45,22 @@ class ReleaseFeedTest {
 
     private val defaultAssets = """
         {
-          "name": "openmouse-0.2.0.apk.sha256",
+          "name": "openmouse-v0.2.0.apk.sha256",
           "content_type": "text/plain",
           "size": 95,
-          "browser_download_url": "$downloadBase/v0.2.0/openmouse-0.2.0.apk.sha256"
+          "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0.apk.sha256"
         },
         {
-          "name": "openmouse-0.2.0.apk",
+          "name": "openmouse-v0.2.0.apk",
           "content_type": "application/vnd.android.package-archive",
           "size": 2345678,
-          "browser_download_url": "$downloadBase/v0.2.0/openmouse-0.2.0.apk"
+          "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0.apk"
         },
         {
-          "name": "openmouse-0.2.0-debug.apk",
+          "name": "openmouse-v0.2.0-debug.apk",
           "content_type": "application/vnd.android.package-archive",
           "size": 3456789,
-          "browser_download_url": "$downloadBase/v0.2.0/openmouse-0.2.0-debug.apk"
+          "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0-debug.apk"
         }
     """.trimIndent()
 
@@ -68,14 +68,14 @@ class ReleaseFeedTest {
     inner class Parse {
 
         @Test
-        fun picksTheFirstOpenmouseApkAmongSeveralAssets() {
+        fun picksTheApkNamedForTheTagAmongSeveralAssets() {
             val release = ReleaseFeed.parse(payload())
             assertNotNull(release)
             release!!
             assertEquals("v0.2.0", release.tag)
             assertEquals("0.2.0", release.version)
-            assertEquals("openmouse-0.2.0.apk", release.apkName)
-            assertEquals("$downloadBase/v0.2.0/openmouse-0.2.0.apk", release.apkUrl)
+            assertEquals("openmouse-v0.2.0.apk", release.apkName)
+            assertEquals("$downloadBase/v0.2.0/openmouse-v0.2.0.apk", release.apkUrl)
             assertEquals(2_345_678L, release.apkSize)
             assertTrue(release.notes.startsWith("## Changes"))
         }
@@ -96,9 +96,9 @@ class ReleaseFeedTest {
         fun releaseWithoutAnApkIsRejected() {
             val sha = """
                 {
-                  "name": "openmouse-0.2.0.apk.sha256",
+                  "name": "openmouse-v0.2.0.apk.sha256",
                   "size": 95,
-                  "browser_download_url": "$downloadBase/v0.2.0/openmouse-0.2.0.apk.sha256"
+                  "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0.apk.sha256"
                 }
             """.trimIndent()
             assertNull(ReleaseFeed.parse(payload(assets = sha)))
@@ -111,6 +111,23 @@ class ReleaseFeedTest {
                 { "name": "app-release.apk", "size": 10, "browser_download_url": "$downloadBase/v0.2.0/app-release.apk" }
             """.trimIndent()
             assertNull(ReleaseFeed.parse(payload(assets = other)))
+        }
+
+        @Test
+        fun aStrayApkIsNeverOfferedInPlaceOfTheReleaseApk() {
+            // A debug build, an APK named for another version, and one without
+            // the v: none is what publish-release.ps1 uploads for this tag.
+            val strays = listOf("openmouse-v0.2.0-debug.apk", "openmouse-v0.1.0.apk", "openmouse-0.2.0.apk")
+            for (name in strays) {
+                val asset = """{ "name": "$name", "size": 10, "browser_download_url": "$downloadBase/v0.2.0/$name" }"""
+                assertNull(ReleaseFeed.parse(payload(assets = asset)), name)
+            }
+            // Listed first, a stray is skipped and the real asset still found.
+            val debugFirst = """
+                { "name": "openmouse-v0.2.0-debug.apk", "size": 10, "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0-debug.apk" },
+                { "name": "openmouse-v0.2.0.apk", "size": 20, "browser_download_url": "$downloadBase/v0.2.0/openmouse-v0.2.0.apk" }
+            """.trimIndent()
+            assertEquals("openmouse-v0.2.0.apk", ReleaseFeed.parse(payload(assets = debugFirst))?.apkName)
         }
 
         @Test
@@ -206,7 +223,7 @@ class ReleaseFeedTest {
 
         @Test
         fun acceptsThisRepositoryReleaseDownloads() {
-            assertTrue(ReleaseFeed.isAllowedDownloadUrl("$downloadBase/v0.2.0/openmouse-0.2.0.apk"))
+            assertTrue(ReleaseFeed.isAllowedDownloadUrl("$downloadBase/v0.2.0/openmouse-v0.2.0.apk"))
             assertTrue(ReleaseFeed.isAllowedDownloadUrl("HTTPS://GitHub.com/owenpkent/openmouse/releases/download/v0.2.0/x.apk"))
         }
 
