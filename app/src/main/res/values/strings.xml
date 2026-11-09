@@ -22,6 +22,7 @@
     <string name="settings_dwell_time">Dwell time</string>
     <string name="settings_move_tolerance">Movement tolerance</string>
     <string name="settings_post_action_tolerance">Re-arm distance after a click</string>
+    <string name="settings_scroll_repeat">Scroll repeat interval</string>
     <string name="settings_cursor_size">Cursor size</string>
     <string name="settings_cursor_color">Cursor color</string>
     <string name="settings_menu_side">Menu side</string>
@@ -31,7 +32,29 @@
     <string name="settings_dwell_value">Dwell time:   %1$.1f s</string>
     <string name="settings_move_value">Movement tolerance:   %1$d dp</string>
     <string name="settings_post_action_value">Re-arm distance after a click:   %1$d dp</string>
+    <string name="settings_scroll_repeat_value">Scroll repeat interval:   %1$d ms</string>
     <string name="settings_size_value">Cursor size:   %1$d%%</string>
+
+    <!-- Updates section (compiled out when BuildConfig.UPDATER_ENABLED is false) -->
+    <string name="settings_updates">Updates</string>
+    <string name="settings_update_check_on_launch">Check for updates when OpenMouse opens</string>
+    <string name="settings_update_check_now">Check for updates now</string>
+    <string name="update_status_checking">Checking…</string>
+    <string name="update_status_up_to_date">You have the latest version (%1$s)</string>
+    <string name="update_status_available">Version %1$s is available</string>
+    <string name="update_status_downloading">Downloading… %1$d%%</string>
+    <string name="update_status_installing">Opening the installer…</string>
+    <string name="update_status_failed">Could not check for updates: %1$s</string>
+    <string name="update_status_signature_mismatch">The downloaded file is not signed by the same key as this app; not installing</string>
+    <string name="update_status_allow_installs">Allow OpenMouse to install updates, then try again</string>
+    <string name="update_error_no_release">no release found</string>
+    <string name="update_error_untrusted_url">the download is not hosted on GitHub</string>
+    <string name="update_error_too_large">the download is too large</string>
+    <string name="update_error_size_mismatch">the download was incomplete</string>
+    <string name="update_dialog_title">OpenMouse %1$s is available</string>
+    <string name="update_dialog_no_notes">No release notes.</string>
+    <string name="update_dialog_install">Download and install</string>
+    <string name="update_dialog_not_now">Not now</string>
 
     <string-array name="cursor_color_names">
         <item>Yellow</item>
@@ -42,19 +65,12 @@
         <item>Orange</item>
     </string-array>
 
-    <!-- Gesture menu labels -->
-    <string name="menu_tap">Tap</string>
-    <string name="menu_double_tap">2×</string>
-    <string name="menu_long_press">Hold</string>
-    <string name="menu_drag">Drag</string>
-    <string name="menu_swipe">Swipe</string>
-    <string name="menu_scroll_up">Scr ↑</string>
-    <string name="menu_scroll_down">Scr ↓</string>
-    <string name="menu_back">Back</string>
-    <string name="menu_home">Home</string>
-    <string name="menu_recents">Recent</string>
-    <string name="menu_notifications">Notif</string>
-    <string name="menu_quick_settings">Quick</string>
-    <string name="menu_pause">Pause</string>
-    <string name="menu_resume">Resume</string>
+    <!-- Action badge beside the cross-hair: the current mode, named in words
+         because the dock itself draws symbols. -->
+    <string name="badge_double_tap">Double tap</string>
+    <string name="badge_long_press">Hold</string>
+    <string name="badge_drag">Drag</string>
+    <string name="badge_swipe">Swipe</string>
+    <string name="badge_scroll_up">Scroll ↑</string>
+    <string name="badge_scroll_down">Scroll ↓</string>
 </resources>

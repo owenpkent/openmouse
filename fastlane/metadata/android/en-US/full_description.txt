@@ -14,5 +14,7 @@ Mouse, built as a standard Android accessibility service. It needs no root and n
 special hardware. On Android 14 and newer it observes the mouse without capturing
 your touchscreen, so finger touch keeps working normally.
 
-Private by design: OpenMouse collects no data, contains no ads or trackers, and
-never connects to the internet.
+Private by design: OpenMouse collects no data and contains no ads or trackers.
+F-Droid and Google Play builds make no network connections at all. Only the APK
+downloaded from GitHub Releases checks there for a newer version, once each time
+it opens; you can turn that off in Settings.

@@ -24,7 +24,15 @@ text and screenshots come from `fastlane/metadata/android/en-US/`.
 - **No non-free dependencies** (androidx + Material only; no Google Play
   Services).
 - **Tagged release** (`v0.1.0`) with matching `versionName`/`versionCode`.
-- **No trackers, no network** (aids the "no anti-features" review).
+- **No trackers, no network.** The recipe passes `openmouseUpdater=false`
+  (`gradleprops`), which compiles the in-app GitHub update check out of the
+  F-Droid build: no Updates section, no launch check, no network code reached.
+  (The sideload APK on GitHub Releases checks for updates once per launch by
+  default; the F-Droid build does not, and never connects to anything.)
+  The flag also leaves out the updater's manifest (`app/src/updater/`), so the
+  F-Droid APK declares no `INTERNET` permission, no `REQUEST_INSTALL_PACKAGES`
+  and no `FileProvider`: it has no network permission at all. F-Droid signs with its own key, so a GitHub APK could never
+  install over the F-Droid copy anyway (aids the "no anti-features" review).
 
 ## The one real risk: toolchain version
 

@@ -13,12 +13,25 @@ set up to pass.
 
 ## Build the upload artifact
 
-Play wants an **App Bundle (.aab)**, not an APK:
+Play wants an **App Bundle (.aab)**, not an APK, and it **must** be built with
+the in-app updater compiled out:
 
 ```bash
-./gradlew bundleRelease
+./gradlew -PopenmouseUpdater=false bundleRelease
 # -> app/build/outputs/bundle/release/app-release.aab  (signed with keystore.properties)
 ```
+
+Do not upload a bundle built without `-PopenmouseUpdater=false`. The default
+(sideload) build checks GitHub Releases on launch and can download and install
+a new APK; Play's Device and Network Abuse policy forbids an app from updating
+itself by any means other than Play's own update mechanism. With the flag the
+Updates section, the launch check and all network code are gone, and Play
+delivers updates. The flag also leaves out the updater's manifest
+(`app/src/updater/`), so the Play build declares neither `INTERNET` nor the
+restricted `REQUEST_INSTALL_PACKAGES` permission, and has no `FileProvider`.
+To check before uploading, build an APK the same way
+(`./gradlew -PopenmouseUpdater=false assembleRelease`): `aapt2 dump permissions`
+on it should list neither.
 
 ## The gate: AccessibilityService policy
 
@@ -32,8 +45,8 @@ accessibility use. Suggested text (adapt as needed):
 > AccessibilityService API solely to (1) draw an on-screen cursor overlay
 > controlled by a physical mouse or trackball, and (2) perform the taps and
 > gestures the user initiates, via dispatchGesture. It does not read window
-> content, collect data, or make network connections. The service is declared
-> with android:isAccessibilityTool="true".
+> content or collect data, and the Play build makes no network connections.
+> The service is declared with android:isAccessibilityTool="true".
 
 Also ensure prominent disclosure: the store listing and the in-app onboarding
 screen both explain what the service does (the onboarding already does).
@@ -47,9 +60,13 @@ Required. Use the live page: **https://owenpkent.github.io/openmouse/privacy-pol
 
 - Data collected: **None**
 - Data shared: **None**
-- Uses no network; nothing to encrypt in transit or delete.
+- The Play build (`-PopenmouseUpdater=false`) has no update check and makes no
+  network connection. No user data is collected, so there is nothing to encrypt
+  in transit or delete.
 
-Answer "No data collected or shared."
+Answer "No data collected or shared." Only the sideload APK on GitHub Releases
+checks for updates (once per launch, on by default); the privacy policy
+describes that, and says plainly that Play builds never connect to anything.
 
 ## Store listing (assets are ready in `fastlane/metadata/android/en-US/`)
 

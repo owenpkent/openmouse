@@ -1,9 +1,37 @@
+# The pull request and main-branch checks. Three build jobs and one aggregate:
+#
+# - `build-test-lint` is the fast job: the debug APK, the JVM unit tests (which
+#   also replay the fuzz seed corpus), and lint on the debug variant. The pre-push
+#   hook (.githooks/pre-push) runs the same tests and lint before every push.
+# - `release-build` builds and lints the release variant, unsigned, so a change
+#   that only breaks release (a ProGuard rule, a resource the debug build has and
+#   release shrinks away) fails here and not on the owner's machine at release
+#   time. Signing never happens in CI: keystore.properties is gitignored, and the
+#   build falls back to an unsigned APK without it. The file is kept a week for a
+#   look, not for use.
+# - `ui-tests` runs the instrumented UI tests on API 30 and 34 emulators.
+# - `osv` (pull requests only) fails on a known vulnerability the pull request
+#   introduces; the steps are in osv-diff.yml.
+# - `Tests` needs all of them and fails if any did not succeed. Branch protection on
+#   main requires that one check, so a job added here is covered by adding it to
+#   the aggregate's `needs` and its check below; see CONTRIBUTING.md, Gates.
+#
+# Actions are pinned to a commit, with the tag in a comment, and the checkout
+# keeps no credentials, so a compromised tag or a step that runs project code
+# cannot push. Dependabot (.github/dependabot.yml) moves the pins.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+
+# A newer push to the same branch makes the older run pointless. Not on main:
+# each commit there has a group of its own, so a merge right after another never
+# cancels the run that tests it.
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,14 +42,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
@@ -33,9 +63,39 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --no-daemon
 
+      # The nightly fuzz workflow's reproducer collection is shell, not Gradle,
+      # so its self-test (plant a crash and a timeout file, collect, assert both
+      # were found, clean up) runs here where every push exercises it.
+      # Each fuzz target runs nightly only if nightly-fuzz.yml lists it, and a
+      # merge once dropped one silently. Compare the target classes in the tree
+      # with the matrix, both ways.
+      - name: Every fuzz target is in the nightly matrix
+        run: |
+          tree=$(find app/src/test -name '*FuzzTest.kt' -exec basename {} .kt \; | sort)
+          matrix=$(sed -n '/^        target:$/,/^    steps:$/p' .github/workflows/nightly-fuzz.yml | sed -n 's/^          - \([A-Za-z0-9]*FuzzTest\)$/\1/p' | sort)
+          if [ -z "$matrix" ] || [ "$tree" != "$matrix" ]; then
+            echo "::error::nightly-fuzz.yml's target matrix does not match the *FuzzTest.kt classes."
+            diff <(echo "$tree") <(echo "$matrix") || true
+            exit 1
+          fi
+          echo "$tree"
+
+      - name: Fuzz findings collector self-test
+        run: sh scripts/collect-fuzz-findings.sh --self-test
+
+      # app/gradle.lockfile must describe the build that just ran: OSV-Scanner
+      # reads it, and Dependabot edits libs.versions.toml without touching it.
+      - name: Check that the dependency lockfile is current
+        run: |
+          ./gradlew :app:dependencies --write-locks --no-daemon -q > /dev/null
+          if ! git diff --exit-code -- app/gradle.lockfile; then
+            echo "::error::app/gradle.lockfile is out of date. Run ./gradlew :app:dependencies --write-locks and commit the result."
+            exit 1
+          fi
+
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reports
           path: |
@@ -44,7 +104,187 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  ui-tests:
+    # Instrumented UI tests (app/src/androidTest) on an emulator, one per input
+    # path: API 34 drives the cursor through onMotionEvent with a non-touchable
+    # overlay; API 30 drives it through the touchable CursorView, so every
+    # injected gesture there also exercises the click-through passthrough
+    # (runGesture) and the idle watchdog.
+    name: UI tests (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 34]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+
+      # Hardware acceleration for the emulator on Linux runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build app and test APKs
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+
+      - name: Run UI tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          # Keep the device log on failure: emulator-only failures are hard to
+          # read from the test report alone.
+          script: ./gradlew connectedDebugAndroidTest --no-daemon || (adb logcat -d > app/build/logcat.txt; exit 1)
+
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ui-test-reports-api-${{ matrix.api-level }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/logcat.txt
+          if-no-files-found: ignore
+
+  release-build:
+    name: Release build and lint (unsigned)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+
+      # Minified and shrunk, the way a release ships. No keystore.properties in
+      # CI, so the APK comes out unsigned.
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Lint release
+        run: ./gradlew lintRelease --no-daemon
+
+      # The release scripts are not exercised by any Gradle test. Parse the
+      # PowerShell publisher (a stray backtick once escaped a closing quote and
+      # broke the whole file) and run the tag verifier's usage, unsigned-tag,
+      # accepting and untrusted-key paths, so a release day does not start with
+      # a syntax error or a verifier that refuses everything.
+      - name: Release scripts parse and refuse what they should
+        shell: bash
+        run: |
+          pwsh -NoProfile -Command '
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile("scripts/publish-release.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+            Write-Host "publish-release.ps1 parses"'
+          # Runs the script end to end with stub gh and apksigner. PowerShell 7
+          # here does not reproduce Windows PowerShell 5.1's NativeCommandError
+          # on redirected stderr; run the fixture under powershell.exe locally
+          # after changing the script (docs/RELEASING.md).
+          pwsh -NoProfile -File scripts/tests/publish-release.fixture.ps1
+          sh scripts/verify-release-tag.sh bad && exit 1 || [ $? -eq 2 ]
+          git -c user.name=ci -c user.email=ci@invalid -c tag.gpgsign=false tag -a v9.9.9 -m "unsigned test tag"
+          if sh scripts/verify-release-tag.sh v9.9.9; then echo "::error::an unsigned tag verified"; exit 1; fi
+          git tag -d v9.9.9
+          # The accepting path: a throwaway key, listed only in a release-signers
+          # committed as a loose object (no branch), must verify through
+          # OPENMOUSE_SIGNERS_REF, and must not verify against this tree's file.
+          ssh-keygen -q -t ed25519 -N "" -C ci -f "$RUNNER_TEMP/ci-key"
+          printf 'ci namespaces="git" %s\n' "$(cut -d' ' -f1,2 "$RUNNER_TEMP/ci-key.pub")" > "$RUNNER_TEMP/signers"
+          blob=$(git hash-object -w "$RUNNER_TEMP/signers")
+          tree=$(printf '100644 blob %s\trelease-signers\n' "$blob" | git mktree)
+          trusted=$(git -c user.name=ci -c user.email=ci@invalid commit-tree "$tree" -m "ci signers")
+          git -c user.name=ci -c user.email=ci@invalid -c gpg.format=ssh -c user.signingkey="$RUNNER_TEMP/ci-key.pub" tag -s v9.9.8 -m "signed test tag"
+          OPENMOUSE_SIGNERS_REF=$trusted sh scripts/verify-release-tag.sh v9.9.8
+          if OPENMOUSE_SIGNERS_REF=HEAD sh scripts/verify-release-tag.sh v9.9.8; then echo "::error::a key outside the trusted release-signers verified"; exit 1; fi
+          git tag -d v9.9.8
+
+      - name: Upload release lint report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-reports
+          path: app/build/reports/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 7
+
+  # Known-vulnerability gate for pull requests: fails only on an advisory the
+  # pull request introduces. The steps, and why they are written out instead of
+  # using the reusable workflow from google/osv-scanner-action, are in
+  # osv-diff.yml; osv-selftest.yml runs the same steps on a hostile fixture to
+  # prove the gate still catches it. A push to main has no base to diff against,
+  # so the job runs on pull requests only and the aggregate accepts that skip.
+  osv:
+    name: New vulnerabilities in this pull request
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/osv-diff.yml
+    with:
+      base_ref: ${{ github.base_ref }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+
+  # The one check branch protection requires. It runs whatever happened above
+  # and fails unless every job it needs succeeded, so a failed or cancelled job
+  # can never sit next to a green check.
+  tests:
+    name: Tests
+    needs: [build-test-lint, release-build, ui-tests, osv]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check that nothing failed or was cancelled
+        env:
+          BUILD_TEST_LINT: ${{ needs.build-test-lint.result }}
+          RELEASE_BUILD: ${{ needs.release-build.result }}
+          UI_TESTS: ${{ needs.ui-tests.result }}
+          OSV: ${{ needs.osv.result }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          bad=0
+          must_pass() {
+            echo "$1: $2"
+            [ "$2" = "success" ] || bad=1
+          }
+          must_pass build-test-lint "$BUILD_TEST_LINT"
+          must_pass release-build "$RELEASE_BUILD"
+          must_pass ui-tests "$UI_TESTS"
+          # The vulnerability diff needs a pull request; on a push to main its
+          # skip is expected, anywhere else it is a failure.
+          echo "osv: $OSV (event: $EVENT)"
+          if [ "$OSV" != "success" ] && ! { [ "$OSV" = "skipped" ] && [ "$EVENT" != "pull_request" ]; }; then
+            bad=1
+          fi
+          exit $bad

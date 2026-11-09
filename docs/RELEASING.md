@@ -37,29 +37,139 @@ Safety answers are in [`docs/play/`](play/README.md).
 
 ## Pre-ship checklist
 
-- [ ] **Signing**: create a release keystore (keep it safe and backed up) or use
-      Play App Signing. F-Droid signs with its own key.
+- [x] **Signing**: the release keystore exists and signed v0.1.0; its
+      certificate is pinned in `release-cert.sha256`. Backups, publishing from
+      a second machine, and what a lost key means are in
+      [`SIGNING.md`](SIGNING.md). Play would add Play App Signing; F-Droid
+      signs with its own key.
 - [ ] **Release build**: turn on `isMinifyEnabled` + shrinkResources for release;
       verify the ProGuard keep rule for the service still holds and the app runs.
 - [ ] **Versioning**: bump `versionCode` / `versionName` per release; tag it.
 - [ ] **App icon polish**: address the launcher-icon lint (non-square silhouette,
       add a `<monochrome>` layer for themed icons).
 - [ ] **Privacy policy**: host a short page (GitHub Pages works). The honest and
-      strong story: OpenMouse collects nothing and sends nothing; settings are
-      stored locally. Required by Play for accessibility apps.
+      strong story: OpenMouse collects nothing; settings are stored locally.
+      F-Droid and Play builds make no network connection; the sideload APK only
+      asks GitHub for a newer release once per launch (on by default, can be
+      turned off). Required by Play for accessibility apps.
 - [ ] **Data Safety form** (Play): "No data collected / shared."
 - [ ] **Localization**: the UI is already string-resourced; translations widen
       reach a lot for an accessibility tool.
 - [ ] **Target API**: keep `targetSdk` current (Play enforces a floor).
 
-## Release process
+## Signed release tags
 
-1. Cut a signed APK/AAB from a tagged commit; attach the APK to a GitHub Release.
-2. Play: roll through **internal → closed → open** testing tracks before
+A release is a tag `vX.Y.Z` on `main`, signed by the owner with an SSH key
+listed in [`release-signers`](../release-signers) at the repository root.
+Nothing else marks a commit as "meant to run": F-Droid builds the commit the tag
+names (`UpdateCheckMode: Tags` in the metadata), the GitHub Release is created
+for the tag, and `scripts/verify-release-tag.sh` is what anyone, the publish
+script included, runs before trusting one.
+
+A tag verifies when it is an annotated tag named for itself, carries a message
+(the message is the release notes), and ends in exactly one SSH signature (no
+OpenPGP or X.509 signature anywhere in it) from a key in `release-signers`.
+`git verify-tag` is pointed at that file alone and forced onto the SSH backend,
+so a key that is merely in the owner's git configuration does not count.
+
+The `release-signers` that counts is the one **on `main`**
+(`refs/remotes/origin/main`, so `git fetch origin` first), never the copy in
+the checkout or in the tag being verified: otherwise a tag could carry a commit
+that adds its own key. A change to `release-signers` therefore takes effect
+only once it is merged to `main`. To verify against another ref (the first
+release, before `release-signers` reaches `main`, or a test), set
+`OPENMOUSE_SIGNERS_REF` to a full ref name such as `refs/heads/main`; a short
+name like `origin/main` could be shadowed by a tag of that name.
+
+SSH signing needs git 2.34 or newer (`git --version`); older git rejects
+`gpg.format=ssh`, and the verifier then fails every tag.
+
+### One-time key setup
+
+Done once, by the owner, on the machine releases are made from. The key may be
+the same one that signs the owner's other projects; `release-signers` carries
+the Polaris release key for that reason.
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/openmouse-release -C openmouse-release
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/openmouse-release.pub
+printf 'openmouse-release namespaces="git" %s\n' "$(cut -d' ' -f1,2 ~/.ssh/openmouse-release.pub)" >> release-signers
+git add release-signers && git commit -m "chore(release): allow the release key"
+```
+
+Merge that commit to `main` before tagging with the new key; until then the
+verifier does not know the key.
+
+Check that signing and verifying work before the first release:
+
+```sh
+git tag -s test-signing -m "test"
+scripts/verify-release-tag.sh test-signing   # fails on the name; that is expected
+git -c gpg.ssh.allowedSignersFile=release-signers verify-tag test-signing
+git tag -d test-signing
+```
+
+## Release checklist
+
+Releases are batched: one is cut when there is something worth installing, not
+for every merged pull request, because each needs the owner's signature.
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, add the
+   `## [X.Y.Z]` entry to CHANGELOG.md (move the Unreleased notes under it), write
+   `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` (500
+   characters at most), and update `CurrentVersion`, `CurrentVersionCode` and
+   the `Builds` entry in `docs/fdroid/io.github.owenpkent.openmouse.yml`.
+   `ReleaseMetadataTest` (part of `./gradlew test`) fails when any of these
+   disagree, so CI catches a half-done bump.
+2. Merge, and wait for the `Tests` run on that commit on `main` to pass.
+3. From a clean checkout of that commit, tag and sign, with the notes as the
+   tag message. Keep the notes in `dist/notes.md` (gitignored, so the publish
+   script still sees a clean tree) so a failed attempt costs only a retry, and
+   pass `--cleanup=verbatim`: git's default for tags strips every line that
+   starts with `#`, which would drop the markdown headings from the notes:
+
+   ```sh
+   git tag -s v0.2.0 --cleanup=verbatim -F dist/notes.md
+   scripts/verify-release-tag.sh v0.2.0
+   git push origin v0.2.0
+   ```
+
+4. Build and publish from the tag (needs `keystore.properties` for the signing
+   key, `gh` logged in, and Git for Windows for `sh`):
+
+   ```powershell
+   git checkout v0.2.0
+   powershell -File scripts\publish-release.ps1    # add -Draft to read it over first
+   ```
+
+   Windows PowerShell 5.1 (`powershell -File`, built into Windows) and
+   PowerShell 7 (`pwsh -File`) both work. `scripts/tests/publish-release.fixture.ps1`
+   runs the script end to end with stub `gh` and `apksigner` in a throwaway
+   repository (nothing is built, signed or published); CI runs it under
+   PowerShell 7, so after changing the script also run it under the one you
+   publish with: `powershell -NoProfile -File scripts\tests\publish-release.fixture.ps1`.
+
+   This is the default build, updater included. The Play AAB must instead be
+   built with `-PopenmouseUpdater=false` (see [`docs/play/`](play/README.md)).
+
+   The script refuses a dirty tree, a HEAD that is not the tag, a tag that does
+   not verify, a missing keystore, or an APK that `apksigner` does not verify
+   or that is signed with any certificate other than the one pinned in
+   `release-cert.sha256` ([SIGNING.md](SIGNING.md); `-CheckApk <apk>` runs just
+   that check, for example on a downloaded asset). It writes `dist/openmouse-v0.2.0.apk` and
+   its SHA-256, and creates the GitHub Release with the tag message as notes.
+   The in-app updater looks for the `openmouse-vX.Y.Z.apk` asset of the latest
+   release, and Android installs it only over an app signed with the same key,
+   so the keystore must be the one that signed what users have. Never attach a
+   debug APK (such as the `apks/` copy) to a release. Users' install and update
+   problems are covered in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+5. Play: roll through **internal → closed → open** testing tracks before
    production. Recruit real testers (see below) on the closed track.
-3. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
+6. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
    The ready-to-submit metadata and step-by-step notes are in
-   [`docs/fdroid/`](fdroid/README.md).
+   [`docs/fdroid/`](fdroid/README.md). After the first submission, F-Droid picks
+   up each new tag on its own.
 
 ## After launch
 

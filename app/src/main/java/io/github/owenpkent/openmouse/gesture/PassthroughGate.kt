@@ -14,12 +14,12 @@ package io.github.owenpkent.openmouse.gesture
  * count leaves zero and is never pushed out by later gestures. When the
  * service's watchdog fires at that deadline, [expire] treats every outstanding
  * completion as lost and restores the overlay. Without the fixed deadline a
- * repeating action (scroll, one notch per dwell period) would reschedule the
+ * repeating action (scroll, one notch per repeat interval) would reschedule the
  * watchdog on every repeat and keep the overlay click-through for as long as
  * the pointer rested.
  *
  * The deadline must exceed the longest single gesture, and gestures are only
- * ever dispatched one at a time per dwell period or physical click, so in
+ * ever dispatched one at a time per repeat interval or physical click, so in
  * healthy operation the count returns to zero and clears the deadline before
  * it is reached; the watchdog fires only after a lost callback.
  */

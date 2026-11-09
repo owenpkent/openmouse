@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the update download folder is shared, and only through the FileProvider
+    declared in the manifest, so the installer can read the APK without the app
+    ever exposing the rest of its storage.
+-->
+<paths>
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

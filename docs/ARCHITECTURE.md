@@ -13,10 +13,16 @@ two genuinely tricky problems an Android mouse cursor has to solve.
 | `DwellMachine` | **Pure** dwell-to-click state machine (unit tested). |
 | `GestureMenu` | Menu drawing and cell-to-action mapping. |
 | `MenuGeometry` | **Pure** menu layout and hit-testing (unit tested). |
-| `GestureDispatcher` | Injects taps, drags, swipes, and scrolls via `dispatchGesture()`. |
+| `GestureDispatcher` | Builds taps, drags, swipes, and scrolls as an `Injection` (gesture + stroke start points) and sends them via `dispatchGesture()`. |
+| `PassthroughGate` | **Pure** bookkeeping for the legacy overlay's click-through window (unit tested). |
+| `SwallowedGestureTracker` | **Pure** detection of gestures the legacy overlay swallowed, and the resend decision (unit tested). |
 | `OpenMouseSettings` | Typed, range-clamped wrapper over SharedPreferences. |
 | `MainActivity` | One-time onboarding and a shortcut into accessibility settings. |
 | `SettingsActivity` | Settings screen; writes straight to `OpenMouseSettings`. |
+| `ReleaseFeed` | **Pure** GitHub release parsing, version comparison and URL allow-list (unit tested). |
+| `LaunchCheck` | **Pure** rule for the once-per-launch update check: default on, explicit off kept, never when compiled out (unit tested). |
+| `UpdateChecker` | Fetches the release feed and APK, checks the signing certificate, hands off to the installer. |
+| `UpdatePrompt` | The "new version" dialog shared by Settings and the launch check. |
 
 Data flows one way: pointer motion enters `CursorView`, becomes `(x, y)` for
 `DwellClicker`, and on a dwell becomes a `tap(x, y)` through `GestureDispatcher`.
@@ -70,8 +76,39 @@ edges, each guarded:
    leave the overlay stuck non-touchable and freeze the cursor). The bookkeeping
    is the pure `PassthroughGate`: the watchdog deadline belongs to the *oldest*
    outstanding gesture and later gestures never push it out, so a repeating
-   scroll (one notch per dwell period) cannot keep postponing recovery after a
+   scroll (one notch per repeat interval) cannot keep postponing recovery after a
    lost callback.
+
+   The window manager applies the click-through change asynchronously, so a
+   fixed wait before injecting is a race: on a slow device (the CI emulator
+   took over 75 ms) the overlay is still touchable when the gesture arrives,
+   takes it, and the tap is lost. So `CursorView` also reports any touchscreen
+   DOWN it rejects, and the pure `SwallowedGestureTracker` matches it, first in
+   first out, to the oldest unclaimed stroke that starts at that point and
+   whose gesture was in flight at the DOWN's event time: dispatched no later,
+   and not yet ended (its completion callback, or failing that its settle).
+   Each `Injection` carries its stroke start points, and the event time is
+   when the platform injected the touch, not when the overlay got it.
+   A short settle after each completion lets a late DOWN arrive, and settled
+   gestures stay on record for a second so a late DOWN is absorbed by its own
+   gesture, never credited to a newer one. Where a DOWN fits two gestures in
+   flight together, the older takes it (a lost click is recoverable, a repeat
+   is not); a gesture that has ended never takes a later one's DOWN, so a
+   click that reached the app cannot leave the next, swallowed click at the
+   same spot unresent. The gesture runs again, after a
+   longer wait (24, then 100, 200 ms), only if every one of its strokes was
+   swallowed, it is still the newest request (every gesture and every menu
+   choice is one), and it is within 400 ms of the first attempt completing.
+   The governing rule is **never repeat what reached the app**: a double tap
+   that half got through, an action a newer one superseded, or a retry so late
+   the user may have clicked again themselves (that click reaches the app
+   through the click-through overlay) is dropped rather than sent. Since a
+   split gesture is never repaired, a multi-stroke gesture (double tap) waits
+   200 ms before its first attempt, and once any swallow is seen the device is
+   known to be slow and every first attempt waits 100 ms. A fast device with
+   single strokes keeps the original 24 ms. Ending a passthrough restores the idle
+   watchdog's choice (click-through while capture is suspended), and the idle
+   sample makes the overlay touchable again as soon as the mouse is back.
 3. *Touchscreen lockout.* If no mouse event arrives for a few seconds, an idle
    watchdog drops the overlay to non-touchable so the bare touchscreen works
    again, then samples periodically to detect a returning mouse and re-arm. So
@@ -87,15 +124,25 @@ drawn at the same point, so they coincide.
 ## The dwell state machine
 
 `DwellMachine` keeps an *anchor* (where the cursor came to rest, plus the menu
-entry under it, if any) and a monotonic rest start. `DwellClicker` polls it from
-a 16 ms ticker with `SystemClock.uptimeMillis()`, and the machine computes
+entry under it, if any) and a monotonic rest start. `DwellClicker` polls it
+every 16 ms with `SystemClock.uptimeMillis()`, but only while a countdown is
+running (`isCountingDown`: armed, no button held, not paused over the app); an
+idle machine, which is most of the time, costs no wake-ups, and every call that
+can arm it (a move, a re-arm in place) restarts the ticker. The machine computes
 `progress = elapsed / dwellTime`. The rules mirror the PowerToys Dwell Click
 engine, and every one of them is biased toward refusing to fire when intent is
 unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 
 - It starts **locked**, and re-locks after every click, after a physical click,
-  on pause, after any live settings change, and when the ticker restarts. A lock
-  is cleared only by deliberate pointer movement; no amount of elapsed time will.
+  after a wheel turn (the content under the resting pointer changed, so the
+  countdown is no longer aimed at what the user chose), on pause, after any live
+  settings change, and when the ticker restarts. A lock is cleared only by
+  deliberate pointer movement; no amount of elapsed time will.
+- **A held button suppresses dwelling.** The service reports the button state
+  on every pointer event (`buttonState != 0`), and while any button is down the
+  machine stays locked whatever the pointer does: a dwell must never cut short
+  the user's own drag or selection. Letting go locks until the pointer moves, so
+  the spot where the button came up is not clicked by the rest that follows.
 - **Two tolerances.** The movement tolerance is the jitter a running countdown
   survives; drift within it leaves the countdown alone, which is what lets a hand
   with a tremor complete a dwell at all. The re-arm distance is how far the
@@ -106,24 +153,42 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
 - **Rest keys.** On every move the service hands the machine the menu entry under
   the cursor (or null over the app). While that key is unchanged the entry itself
   is the tolerance: a tremor inside a menu cell, however large, neither restarts
-  the countdown nor re-fires the entry. Entering a cell starts its countdown at
-  once. Leaving a cell for the app locks and the ordinary distance applies from
-  the rest point, so a slip into the gap between cells, or a menu that re-lays
-  out under a still pointer (the strip shifts on short screens), never taps the
-  app. After a menu choice, a dock change, or a resize (`CursorView` reports
-  every re-layout), the service re-feeds the entry now under the pointer before
-  locking, for the same reason. This is the PowerToys toolbar rule ("an
-  activated button will not fire again until the pointer leaves it").
+  the countdown nor re-fires the entry. Entering a cell while a countdown is
+  running starts the cell's countdown at once: the cell edge is the deliberate
+  act.
+  Entering one while the machine is locked is not enough on its own; the pointer
+  must also clear the lock's tolerance from the lock anchor, since a lock is
+  cleared by deliberate movement and nothing else. That is what keeps a tremor
+  across a cell edge from selecting the neighbour after a menu choice, and what
+  keeps the dock from selecting a cell it laid out beside a still pointer when
+  it opened (the collapsed handle is taller than a cell, so opening it can leave
+  the pointer in a gap with cells 1 px away). Leaving a cell for the app locks
+  and the ordinary distance applies from the rest point, so a slip into the gap
+  between cells, or a menu that re-lays out under a still pointer (the strip
+  shifts on short screens), never taps the app. After a menu choice, a dock
+  change, or a resize (`CursorView` reports every re-layout), the service
+  re-feeds the entry now under the pointer before locking, for the same reason.
+  This is the PowerToys toolbar rule ("an activated button will not fire again
+  until the pointer leaves it").
 - **Pause** (the menu's Pause / Resume entry) suspends dwelling on the app but
   not on the menu, so a user who cannot click can still reach Resume. It locks in
   both directions, so time spent paused never counts toward a countdown. The
   service also refuses a dwell that reaches `handlePrimaryAction` over the app
   while paused, so a rest key that went stale between pointer events can never
   tap the app; physical clicks are unaffected.
+- **The ring waits, the click does not.** The countdown ring stays hidden for
+  the first fifth of a countdown, at most 250 ms (`Poll.ringProgress`). Once the
+  machine is armed every brief pause in ordinary movement starts a countdown,
+  and a ring drawn from the first poll trailed a pointer that had merely slowed
+  down. The dwell itself fires exactly when it always did.
 - **Scroll repeats in place.** After a scroll dwell the service re-arms the
-  machine at the same anchor instead of waiting for movement, so another notch
-  lands each dwell period while the pointer keeps resting. Moving away re-anchors
-  as usual.
+  machine at the same anchor instead of waiting for movement. Only the first
+  notch at a rest point waits the full dwell time, because that one is the
+  decision; the re-armed countdown runs for the scroll repeat interval (400 ms
+  by default, a setting), so another notch lands each interval while the
+  pointer keeps resting. One notch per dwell time, three lines a second at the
+  defaults, was too slow to read a page by. Moving away, or any lock, goes back
+  to the full dwell time.
 
 `SystemClock.uptimeMillis()` is used (not wall-clock) so the timing is immune to
 clock changes. Changing a setting live re-locks, so dragging the dwell slider
@@ -139,8 +204,13 @@ entry.
 The menu is **not a real View hierarchy**. `CursorView` owns every pointer
 event, so a separate touchable button strip underneath it would never receive
 hover. Instead the menu is pure data: `CursorView` draws it, and the service
-hit-tests the cursor position against it. Both the dwell timer and a physical
-left-click funnel into one method:
+hit-tests the cursor position against it. Whenever the current mode is not a
+plain tap, `CursorView` also draws an **action badge**, a pill naming the mode
+in words (`GestureMenu.labelFor`; the dock itself draws symbols), up and to the left of the cross-hair (flipping to the other side
+near an edge; the pure `BadgePlacement` decides where), so a sticky scroll or a
+drag waiting for its end point is visible where the user is looking, not only
+on the menu at the screen edge. Both the dwell timer and a physical left-click
+funnel into one method:
 
 ```
 handlePrimaryAction(x, y, fromDwell):
@@ -166,17 +236,20 @@ Navigation actions use `performGlobalAction()` and need no passthrough, since th
 do not inject touches into our window. Everything that injects touches (tap,
 double-tap, long-press, drag, swipe, scroll) goes through `runGesture`, which
 dispatches directly on the modern path and does the legacy passthrough dance on
-API 24-33.
+API 24-33, including resending a gesture the overlay swallowed (see "Legacy
+path" above).
 
-The strip is laid out by the pure `MenuGeometry`: a grid whose toggle is
-anchored at its collapsed center (so it does not jump when the grid expands)
-and clamped to stay on screen on short/landscape displays. The grid is two
-columns wide on a tall screen; when the expanded strip would still run off a
+The strip is a dock flush with one screen edge, laid out by the pure
+`MenuGeometry`: square glyph cells (symbols, not words, so they stay small and
+need no translation) under a toggle that is anchored at its collapsed center
+(so it does not jump when the grid expands) and clamped to stay on screen on
+short/landscape displays. The grid is two columns wide on a tall screen; when the expanded strip would still run off a
 short one (a phone in landscape) it widens a column at a time until it fits or
 the screen width runs out, so the last row, Pause / Resume, stays reachable
-however the device is held. While collapsed, only the toggle is a hit target,
-so the rest of the screen clicks through; the left/right dock setting moves it
-off a busy edge.
+however the device is held. While collapsed, only a slim handle on the edge is
+a hit target (the screen edge stops the pointer, so a narrow target there is
+easy to hit with a mouse) and the rest of the screen clicks through; the
+left/right dock setting moves it off a busy edge.
 
 ### One-shot vs sticky modes
 
@@ -187,7 +260,7 @@ After it runs, a mode either reverts to `TAP` (one-shot) or stays selected
   back to tapping.
 - **Sticky**: tap, scroll-up, scroll-down. Scrolling is repeatable, so it stays
   active; a scroll dwell also re-arms in place, so holding still keeps
-  scrolling one notch per dwell period.
+  scrolling one notch per repeat interval after the first full dwell.
 
 The Pause entry is neither: it toggles dwell clicking on the app on and off,
 reads "Resume" while paused, and stays reachable by dwell because the machine
@@ -217,12 +290,17 @@ into classes with **no Android imports**, which run as plain JVM tests:
 - `MenuGeometry` -- layout and hit-testing on a plain `Bounds` rectangle (not
   `android.graphics.RectF`, which is not available in JVM tests). `GestureMenu`
   keeps the `Context`, `Paint`, and `Canvas` work.
+- `PassthroughGate` -- when the legacy overlay goes click-through and when it
+  comes back, including the watchdog deadline.
+- `SwallowedGestureTracker` -- matching touches the legacy overlay rejected to
+  the strokes they came from, and whether resending is safe. Times and
+  positions are parameters, so every race above can be replayed exactly.
 
 The pattern to follow when adding behavior: put the logic in a pure class, test
 it there, and keep the Android wrapper a straight pass-through. Tests live in
 `app/src/test/` and run with `./gradlew test`.
 
-Both pure classes are also fuzzed (Jazzer, under `app/src/test/.../fuzz/`),
+Every pure class is also fuzzed (Jazzer, under `app/src/test/.../fuzz/`),
 the same arrangement PowerToys uses for its Dwell Click engine: the fuzzer
 decodes its bytes into event sequences with adversarial coordinates, timestamps
 and settings, and invariants are asserted after every poll. That is why the pure
@@ -231,6 +309,23 @@ below 1 ms reads as 1 ms, a negative or NaN threshold as 0, a timestamp older
 than the rest anchor as zero elapsed time, and a negative item count or column
 count as 0 and 1. Fuzzing is opt-in (`JAZZER_FUZZ=1`); a plain `gradlew test`
 only replays the seed corpus. A nightly workflow runs it for real.
+
+## UI tests: the Android wrappers, end to end
+
+The wrappers are covered by instrumented tests in `app/src/androidTest/`
+(`gradlew connectedDebugAndroidTest`, on an emulator in CI). The platform filters
+shell-injected input out of `onMotionEvent`, so the tests, which run in the app's
+process, take the connected service from `MouseAccessibilityService.connected`
+(a `@VisibleForTesting` weak reference) and feed synthetic `SOURCE_MOUSE` events
+in where real ones arrive: `onMotionEvent` on API 34+, the `CursorView` overlay
+(`overlayView`) on API 24-33. Everything after that is production code, so on
+the legacy path each injected gesture only reaches the app if the passthrough
+made the overlay click-through for it. Injected
+touches land in `TouchRecorderActivity`, a non-exported activity in the `debug`
+source set (absent from release builds), which logs their screen coordinates so a
+test can compare them with where the cross-hair was. The seam is read-only apart
+from those entry points: `menuEntryAt`, `currentMode`, `hasPendingPoint` and
+`isPaused` let a test find menu entries and observe state, nothing more.
 
 ## Settings and live updates
 
@@ -248,6 +343,64 @@ Because the settings screen and the service run in the same process, they share
 one SharedPreferences instance, so the listener fires on the main thread and the
 view updates are safe. The result is that tuning a slider moves the cursor on
 screen immediately.
+
+## Updates
+
+Sideloading from GitHub Releases is the only live channel, so the app can look
+for its own updates there. This is the **only code in OpenMouse that touches
+the network**, and it is built to stay narrow:
+
+- **Once per launch, or on request.** `UpdateChecker.check` runs when the user
+  presses "Check for updates now" in Settings, or once per process when
+  `MainActivity` opens if the launch check is on. It is on by default in builds
+  that carry the updater (the sideload APK has no store to tell it about new
+  versions); the pure `LaunchCheck` decides, from the build flag, the stored
+  switch (absent means the default, an explicit `false` always wins) and the
+  per-process latch, and is unit-tested (`LaunchCheckTest`). The launch check is
+  quiet: it shows nothing unless a newer release exists. There is no scheduled
+  job and no background service, and the accessibility service never touches
+  the network.
+- **Two hosts.** The feed is `GET api.github.com/repos/owenpkent/openmouse/
+  releases/latest` with an `Accept: application/vnd.github+json` header and a
+  `OpenMouse/<version>` user agent (GitHub requires one); nothing else is sent.
+  The APK may only be fetched from
+  `https://github.com/owenpkent/openmouse/releases/download/`
+  (`ReleaseFeed.isAllowedDownloadUrl`). Redirects are followed by hand, at most
+  five, https only, and each hop must land on `github.com` or a
+  `*.githubusercontent.com` host (`isAllowedRedirectHost`); the platform's
+  automatic following would go anywhere the server said.
+- **Caps.** The feed body is capped at 1 MiB and the APK at 100 MiB; when the
+  release lists the asset size, the download must match it exactly. The file
+  lands in `cache/updates/` and is exposed to the installer through a
+  `FileProvider` scoped to that one folder (`res/xml/file_paths.xml`).
+- **Same key or nothing.** Before the installer sees the file,
+  `signatureMatches` reads the archive's signing certificates
+  (`GET_SIGNING_CERTIFICATES` on API 28+, `GET_SIGNATURES` before) and requires
+  the set to equal the installed app's, and the package name to be ours. A
+  mismatch deletes the file and tells the user; it is never offered to the
+  install flow. The system installer then asks the user itself, and on API 26+
+  the app first sends them to grant "install unknown apps" if it has not been.
+- **Compile-out.** `BuildConfig.UPDATER_ENABLED` comes from the Gradle property
+  `openmouseUpdater` (default true). `-PopenmouseUpdater=false` hides the whole
+  Settings section and skips the launch check (R8 then drops the updater code).
+  The updater's manifest entries (`INTERNET`, `REQUEST_INSTALL_PACKAGES`, the
+  `FileProvider`) live in `app/src/updater/AndroidManifest.xml`, which
+  `app/build.gradle.kts` merges in (`sources.manifests.addStaticManifestFile`)
+  only when the updater is compiled in, so a flag-off APK declares no network
+  permission at all.
+  The F-Droid recipe and the Play build both pass it: both stores sign with
+  their own key and ship updates themselves, and Play policy forbids an app
+  updating itself outside Play. Those builds make no network connection.
+- **No retained state.** Every callback checks that the activity that asked
+  for it is still alive (`UpdatePrompt.shouldDeliver`: neither finishing nor
+  destroyed) and otherwise drops the result. Rotating or leaving Settings
+  mid-download therefore never shows a dialog on, or launches the installer
+  from, a screen that is gone; the file stays in the cache and the next check
+  offers it again.
+
+The decisions (what counts as a release, which version is newer, which URLs
+are allowed) live in the pure `ReleaseFeed` and are unit-tested; `UpdateChecker`
+is the Android wrapper around sockets, `PackageManager` and intents.
 
 ## Coordinate space
 

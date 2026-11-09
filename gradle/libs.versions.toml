@@ -10,6 +10,17 @@ junitPlatform = "1.14.4"
 # Jazzer is the JVM libFuzzer: the fuzz tests under app/src/test/.../fuzz run as
 # plain JUnit tests (replaying the seed corpus) unless JAZZER_FUZZ=1 is set.
 jazzer = "0.30.0"
+# Instrumented UI tests under app/src/androidTest (run on an emulator or device
+# with `gradlew connectedDebugAndroidTest`). JUnit 4: AndroidJUnitRunner does not
+# run JUnit 5.
+androidxTestCore = "1.7.0"
+androidxTestRunner = "1.7.0"
+androidxTestRules = "1.7.0"
+androidxTestExtJunit = "1.3.0"
+espresso = "3.7.0"
+# Android ships org.json in the platform; the JVM unit tests need the real
+# library because the mockable android.jar stubs it out.
+orgJson = "20250517"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -18,6 +29,12 @@ material = { group = "com.google.android.material", name = "material", version.r
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version.ref = "junitPlatform" }
 jazzer-junit = { group = "com.code-intelligence", name = "jazzer-junit", version.ref = "jazzer" }
+androidx-test-core = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTestCore" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRules" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit-ktx", version.ref = "androidxTestExtJunit" }
+androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
