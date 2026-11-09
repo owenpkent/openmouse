@@ -26,10 +26,12 @@ with or endorsed by Ease Apps.
 - **F-Droid** and **Google Play**: planned; the metadata and submission guides are
   ready (see [docs/RELEASING.md](docs/RELEASING.md)).
 
-Once installed, OpenMouse can check GitHub Releases for a newer version from
-Settings > Updates (off by default: press **Check for updates now**, or turn on
-the launch check). It only installs an APK signed with the same key as the copy
+The APK from GitHub Releases checks for a newer release once each time it
+opens and only speaks up if one exists. Turn that off under Settings > Updates
+(**Check for updates when OpenMouse opens**), or check on demand with **Check
+for updates now**. It only installs an APK signed with the same key as the copy
 already on the device, and the system installer asks before anything changes.
+F-Droid and Play builds leave the updater out and never use the network.
 
 Then open OpenMouse, enable **OpenMouse cursor** in Accessibility settings, and
 plug in a mouse (details under [Enabling](#enabling-openmouse-on-a-device)).
@@ -104,7 +106,8 @@ two input-capture paths and how injected gestures reach the app below.
   and a dwell-click on/off toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
-- Optional update check against GitHub Releases (off by default; Settings)
+- Update check against GitHub Releases in the sideload APK (once per launch,
+  can be turned off in Settings; compiled out of F-Droid and Play builds)
 
 **Roadmap** (mirrors the original's feature set)
 

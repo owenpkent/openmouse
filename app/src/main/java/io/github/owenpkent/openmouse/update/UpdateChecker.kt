@@ -29,8 +29,9 @@ import javax.net.ssl.HttpsURLConnection
  * which version is newer) live in the pure [ReleaseFeed].
  *
  * Safety rules, in the order they apply:
- * - Nothing here runs unless the user pressed "Check for updates now" or turned
- *   on the launch check (off by default). There is no background job.
+ * - Nothing here runs except when the user presses "Check for updates now", or
+ *   once per process when the app opens if the launch check is on (the default,
+ *   see [LaunchCheck]; the user can turn it off). There is no background job.
  * - The release list comes from `api.github.com` and the APK only from
  *   `github.com/owenpkent/openmouse/releases/download/`, over https, following
  *   at most five redirects and only onto GitHub's own hosts.

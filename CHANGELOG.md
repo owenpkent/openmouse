@@ -10,12 +10,15 @@ tagged release.
 ### Added
 
 - An in-app update check against GitHub Releases, under Settings > Updates.
-  Off by default: press "Check for updates now", or turn on the check at
-  launch. It only talks to GitHub (the release feed on `api.github.com`, the
+  The sideload build checks quietly once per launch (on by default; turn off
+  "Check for updates when OpenMouse opens" to stop it, and that choice is kept)
+  and prompts only when a newer release exists; "Check for updates now" checks
+  on demand. It only talks to GitHub (the release feed on `api.github.com`, the
   APK from `github.com`, redirects allowed onto GitHub's own hosts only),
   refuses any APK not signed with the same key as the installed copy, and
   leaves the final step to the system installer. The feature compiles out with
-  `-PopenmouseUpdater=false`, which the F-Droid recipe uses. This adds the
+  `-PopenmouseUpdater=false`, which the F-Droid recipe and the Play build use:
+  those builds make no network connection at all. This adds the
   `INTERNET` and `REQUEST_INSTALL_PACKAGES` permissions; the privacy policy
   describes the one network use.
 - An action badge beside the cross-hair names the current mode (double-tap,

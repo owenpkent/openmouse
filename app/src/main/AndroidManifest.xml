@@ -5,9 +5,10 @@
         Both permissions exist for the optional update check (Settings > Updates),
         the app's only network path: INTERNET to ask GitHub Releases for the
         latest version and fetch the APK, REQUEST_INSTALL_PACKAGES to hand that
-        APK to the system installer. Nothing runs unless the user asks for a
-        check or opts in to one at launch. The F-Droid build compiles the
-        feature out (-PopenmouseUpdater=false) and never uses either.
+        APK to the system installer. The check runs once per launch (on by
+        default, can be turned off) or when the user asks; installing always
+        needs the user's go-ahead. F-Droid and Play builds compile the feature
+        out (-PopenmouseUpdater=false) and never use either.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />

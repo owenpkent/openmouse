@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import io.github.owenpkent.openmouse.service.MouseAccessibilityService
 import io.github.owenpkent.openmouse.settings.OpenMouseSettings
+import io.github.owenpkent.openmouse.update.LaunchCheck
 import io.github.owenpkent.openmouse.update.UpdateChecker
 import io.github.owenpkent.openmouse.update.UpdatePrompt
 
@@ -42,14 +43,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * The opt-in launch check. It runs once per process, only when the user has
-     * turned it on in Settings, and stays quiet unless a newer release exists:
-     * "up to date" and failures are not worth interrupting the onboarding
-     * screen for. The build flag removes it entirely from F-Droid builds.
+     * The launch check. It runs once per process, on by default unless the user
+     * turned it off in Settings (see [LaunchCheck]), and stays quiet unless a
+     * newer release exists: "up to date" and failures are not worth
+     * interrupting the onboarding screen for. The build flag removes it entirely
+     * from F-Droid and Play builds.
      */
     private fun maybeCheckForUpdates() {
-        if (!BuildConfig.UPDATER_ENABLED || checkedThisProcess) return
-        if (!OpenMouseSettings(this).updateCheckOnLaunch) return
+        // The constant flag first, so R8 drops the whole path (UpdateChecker
+        // included) from builds compiled with -PopenmouseUpdater=false.
+        if (!BuildConfig.UPDATER_ENABLED) return
+        val stored = OpenMouseSettings(this).storedUpdateCheckOnLaunch
+        if (!LaunchCheck.shouldRun(BuildConfig.UPDATER_ENABLED, stored, checkedThisProcess)) return
         checkedThisProcess = true
         val checker = UpdateChecker(this)
         checker.check { result ->

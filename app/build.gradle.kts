@@ -16,10 +16,12 @@ val keystoreProperties = Properties().apply {
     if (hasReleaseKeystore) FileInputStream(keystorePropertiesFile).use { load(it) }
 }
 
-// The in-app update check (Settings > Updates) is the app's only network path.
-// F-Droid builds pass -PopenmouseUpdater=false so the whole feature, UI and
-// launch check included, compiles out: F-Droid signs with its own key, so an
-// APK from GitHub Releases could never install over it anyway.
+// The in-app update check (Settings > Updates, plus a check at launch that is
+// on by default) is the app's only network path. F-Droid and Play builds pass
+// -PopenmouseUpdater=false so the whole feature, UI and launch check included,
+// compiles out: both stores ship updates themselves and sign with their own key,
+// so an APK from GitHub Releases could never install over them anyway, and Play
+// policy forbids an app updating itself outside Play.
 val updaterEnabled = providers.gradleProperty("openmouseUpdater").orElse("true").get().toBoolean()
 
 android {

@@ -143,9 +143,10 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * The Updates section is the app's only network feature. It is opt-in (the
-     * launch check defaults to off; the button acts only when pressed) and
-     * disappears entirely from builds that compile the updater out.
+     * The Updates section is the app's only network feature. The launch check
+     * is on by default and this switch turns it off (an explicit off is kept);
+     * the button acts only when pressed. The section disappears entirely from
+     * builds that compile the updater out.
      */
     private fun setupUpdates() {
         val section = findViewById<View>(R.id.updatesSection)

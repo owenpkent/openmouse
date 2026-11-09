@@ -1,10 +1,11 @@
 # OpenMouse Privacy Policy
 
-_Last updated: 2026-11-04_
+_Last updated: 2026-11-09_
 
 OpenMouse is an open-source Android accessibility tool. The short version:
-**the app collects nothing, and the only thing it ever connects to is GitHub,
-and only when you ask it to check for an update.**
+**the app collects nothing. The only thing it ever connects to is GitHub, to
+check for a newer version, and only in the APK downloaded from GitHub Releases.
+Builds from F-Droid or Google Play never connect to anything.**
 
 ## Data collection
 
@@ -13,20 +14,35 @@ It contains no analytics, no advertising, and no crash reporting.
 
 ## Network use
 
-The one network feature is the optional update check, under Settings > Updates:
+The one network feature is the update check. Which build you have decides
+whether it exists at all:
 
-- It runs only when you press **Check for updates now**, or when you have
-  turned on **Check for updates when OpenMouse opens**. That switch is **off by
-  default**; nothing checks in the background, and nothing is scheduled.
-- It talks to exactly two hosts, both GitHub's: `api.github.com` to read the
-  list of releases, and `github.com` (with GitHub's own download servers) to
-  fetch the new APK, and only if you choose **Download and install**.
-- It sends no identifiers. The request carries the app's name and version as
-  its user agent and nothing else; GitHub sees it the way it sees any download,
-  including your IP address, under
+- **F-Droid and Google Play builds** have the update check compiled out. They
+  make no network connection of any kind, and their store delivers updates.
+- **The APK from GitHub Releases** (the "sideload" build) includes it, because
+  nothing else would tell you a new version exists.
+
+In the sideload build:
+
+- **Once each time OpenMouse opens**, it asks GitHub whether a newer release
+  exists. This is **on by default**. It happens at most once per launch (not
+  again on rotation or when you come back to the app while it is still
+  running), and you only see anything if a newer version is available. To stop
+  it, turn off **Check for updates when OpenMouse opens** under Settings >
+  Updates; that choice is kept.
+- You can also press **Check for updates now** under Settings > Updates at any
+  time.
+- Nothing checks in the background, and nothing is scheduled. The accessibility
+  service itself never touches the network.
+- The check is a single request to `api.github.com` for the latest release of
+  `owenpkent/openmouse`. Only if you then choose **Download and install** does
+  it fetch the new APK from `github.com` (and GitHub's own download servers).
+  Those are the only hosts it will contact.
+- It sends no identifiers, no settings and nothing about how you use the app.
+  The request carries only the app's name and version as its user agent.
+  GitHub sees it the way it sees any web request: your IP address, the time,
+  that user agent and the release being asked about, handled under
   [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-- Builds distributed through F-Droid have this feature compiled out entirely
-  and never connect to anything.
 
 Nothing else in the app ever connects to the network.
 
@@ -49,9 +65,10 @@ the "retrieve window content" capability.
 ## Permissions
 
 The app requests no runtime permissions. It declares two install-time
-permissions, both for the optional update check described above:
+permissions, both for the update check described above (F-Droid and Play builds
+declare them too but never use them, because the feature is compiled out):
 
-- `INTERNET`: to contact GitHub when you ask for an update check.
+- `INTERNET`: to contact GitHub for the update check.
 - `REQUEST_INSTALL_PACKAGES`: to hand a downloaded update to Android's package
   installer, which asks you before anything is installed. OpenMouse only offers
   an APK that is signed with the same key as the copy you already have.

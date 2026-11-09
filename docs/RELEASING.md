@@ -45,8 +45,10 @@ Safety answers are in [`docs/play/`](play/README.md).
 - [ ] **App icon polish**: address the launcher-icon lint (non-square silhouette,
       add a `<monochrome>` layer for themed icons).
 - [ ] **Privacy policy**: host a short page (GitHub Pages works). The honest and
-      strong story: OpenMouse collects nothing and sends nothing; settings are
-      stored locally. Required by Play for accessibility apps.
+      strong story: OpenMouse collects nothing; settings are stored locally.
+      F-Droid and Play builds make no network connection; the sideload APK only
+      asks GitHub for a newer release once per launch (on by default, can be
+      turned off). Required by Play for accessibility apps.
 - [ ] **Data Safety form** (Play): "No data collected / shared."
 - [ ] **Localization**: the UI is already string-resourced; translations widen
       reach a lot for an accessibility tool.
@@ -54,7 +56,9 @@ Safety answers are in [`docs/play/`](play/README.md).
 
 ## Release process
 
-1. Cut a signed APK/AAB from a tagged commit; attach the APK to a GitHub Release.
+1. Cut a signed APK from a tagged commit (default build, updater included) and
+   attach it to a GitHub Release. The Play AAB must be built with
+   `-PopenmouseUpdater=false` (see [`docs/play/`](play/README.md)).
 2. Play: roll through **internal → closed → open** testing tracks before
    production. Recruit real testers (see below) on the closed track.
 3. F-Droid: submit metadata to the fdroiddata repo; F-Droid builds from source.
