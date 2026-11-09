@@ -38,10 +38,10 @@ is what CI builds. Both `keystore.properties` and `*.jks` are gitignored.
 ### Check which key signed an APK
 
 ```powershell
-pwsh -File scripts\publish-release.ps1 -CheckApk path\to\openmouse-vX.Y.Z.apk
+powershell -File scripts\publish-release.ps1 -CheckApk path\to\openmouse-vX.Y.Z.apk
 ```
 
-That runs only the certificate check and exits 0 on a match. By hand, with the
+(`pwsh -File` works the same.) That runs only the certificate check and exits 0 on a match. By hand, with the
 SDK's build-tools:
 
 ```bash

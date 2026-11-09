@@ -37,9 +37,13 @@
     keystore or gh. Use it on a downloaded release asset or a local build.
 
 .EXAMPLE
-    pwsh -File scripts\publish-release.ps1
-    pwsh -File scripts\publish-release.ps1 -Draft
-    pwsh -File scripts\publish-release.ps1 -CheckApk dist\openmouse-v0.1.0.apk
+    powershell -File scripts\publish-release.ps1
+    powershell -File scripts\publish-release.ps1 -Draft
+    powershell -File scripts\publish-release.ps1 -CheckApk dist\openmouse-v0.1.0.apk
+
+    Windows PowerShell 5.1 (powershell) and PowerShell 7 (pwsh) both work.
+    scripts/tests/publish-release.fixture.ps1 runs this script end to end with
+    stub tools; run it under the PowerShell you publish with.
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
@@ -67,6 +71,48 @@ Set-Location $repoRoot
 function Fail($message) {
     Write-Host "publish-release: $message" -ForegroundColor Red
     exit 1
+}
+
+# Every native command (git, sh, gradlew, apksigner, gh) runs through here.
+# Windows PowerShell 5.1 turns each line a native command writes to a redirected
+# stderr into an error record, and with $ErrorActionPreference = "Stop" the
+# first one ends the script (NativeCommandError) before $LASTEXITCODE can be
+# read, even under *> $null. Several of these commands write to stderr on paths
+# that are expected (gh release view of a release not made yet) or harmless
+# (Gradle and apksigner warnings), so the preference is Continue for the call
+# alone (this function's scope) and the exit code decides. Stdout and stderr
+# come back separately; -Echo also prints each line as it arrives, for the
+# steps whose output is the progress report.
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$Command,
+        [string[]]$Arguments = @(),
+        [switch]$Echo
+    )
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) { Fail "$Command not found" }
+    $ErrorActionPreference = "Continue"
+    # PowerShell 7.3+ can also make a nonzero exit an error; callers check it.
+    $PSNativeCommandUseErrorActionPreference = $false
+    $stdout = New-Object System.Collections.Generic.List[string]
+    $stderr = New-Object System.Collections.Generic.List[string]
+    & $Command @Arguments 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            $line = $_.ToString()
+            $stderr.Add($line)
+        } else {
+            $line = [string]$_
+            $stdout.Add($line)
+        }
+        if ($Echo) { Write-Host $line }
+    }
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Stdout = $stdout.ToArray(); Stderr = $stderr.ToArray() }
+}
+
+# What a failed native command said, for a Fail message: its stderr, or its
+# stdout when stderr is empty.
+function Get-NativeMessage($result) {
+    $lines = if ($result.Stderr.Count -gt 0) { $result.Stderr } else { $result.Stdout }
+    return (@($lines | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join " | ")
 }
 
 # Gradle and apksigner both need a JDK; Android Studio bundles one.
@@ -130,9 +176,9 @@ function Assert-ReleaseCert($apk) {
     if (-not (Test-Path $apk)) { Fail "$apk does not exist" }
     $expected = Get-PinnedCertSha256
     $apksigner = Get-Apksigner
-    $output = & $apksigner verify --print-certs $apk
-    if ($LASTEXITCODE -ne 0) { Fail "apksigner says $apk does not verify (unsigned or damaged); not publishing" }
-    $digests = @($output | ForEach-Object {
+    $verify = Invoke-Native $apksigner @("verify", "--print-certs", $apk)
+    if ($verify.ExitCode -ne 0) { Fail "apksigner says $apk does not verify (unsigned or damaged); not publishing: $(Get-NativeMessage $verify)" }
+    $digests = @($verify.Stdout | ForEach-Object {
         $m = [regex]::Match($_, '^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$')
         if ($m.Success) { $m.Groups[1].Value.ToLower() }
     })
@@ -159,22 +205,34 @@ $versionCode = $codeMatch.Groups[1].Value
 $tag = "v$version"
 Write-Host "Version $version (versionCode $versionCode), tag $tag" -ForegroundColor Cyan
 
-$dirty = git status --porcelain
-if ($dirty) { Fail "the working tree is not clean; a release is built from the tag alone" }
+$status = Invoke-Native git @("status", "--porcelain")
+if ($status.ExitCode -ne 0) { Fail "git status failed: $(Get-NativeMessage $status)" }
+if (($status.Stdout -join "").Trim()) { Fail "the working tree is not clean; a release is built from the tag alone" }
 
-$tagCommit = git rev-parse --verify --quiet "$tag^{commit}"
-if ($LASTEXITCODE -ne 0 -or -not $tagCommit) { Fail "tag $tag does not exist; tag and sign first (docs/RELEASING.md)" }
-$head = git rev-parse HEAD
+$tagLookup = Invoke-Native git @("rev-parse", "--verify", "--quiet", "$tag^{commit}")
+if ($tagLookup.ExitCode -ne 0 -or $tagLookup.Stdout.Count -eq 0) { Fail "tag $tag does not exist; tag and sign first (docs/RELEASING.md)" }
+$tagCommit = $tagLookup.Stdout[0].Trim()
+$headLookup = Invoke-Native git @("rev-parse", "HEAD")
+if ($headLookup.ExitCode -ne 0 -or $headLookup.Stdout.Count -eq 0) { Fail "git rev-parse HEAD failed: $(Get-NativeMessage $headLookup)" }
+$head = $headLookup.Stdout[0].Trim()
 if ($head -ne $tagCommit) { Fail "HEAD ($head) is not the commit $tag points at ($tagCommit); run git checkout $tag first" }
 
 # --- 2. Verify the tag -----------------------------------------------------
+# Git for Windows does not put sh on PATH by default, so also look where it
+# installs (for all users, or per user under LocalAppData) and next to git
+# itself (<Git>\cmd\git.exe beside <Git>\bin\sh.exe).
 $sh = Get-Command sh -ErrorAction SilentlyContinue
 if (-not $sh) {
-    $gitSh = Join-Path $env:ProgramFiles "Git\bin\sh.exe"
-    if (Test-Path $gitSh) { $sh = Get-Command $gitSh } else { Fail "sh.exe not found; install Git for Windows or run scripts/verify-release-tag.sh by hand" }
+    $candidates = @()
+    if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles "Git\bin\sh.exe" }
+    if ($env:LOCALAPPDATA) { $candidates += Join-Path $env:LOCALAPPDATA "Programs\Git\bin\sh.exe" }
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($git -and $git.Source) { $candidates += Join-Path (Split-Path -Parent (Split-Path -Parent $git.Source)) "bin\sh.exe" }
+    $gitSh = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($gitSh) { $sh = Get-Command $gitSh } else { Fail "sh.exe not found; install Git for Windows or run scripts/verify-release-tag.sh by hand" }
 }
-& $sh.Source "scripts/verify-release-tag.sh" $tag
-if ($LASTEXITCODE -ne 0) { Fail "$tag does not verify; not building" }
+$tagCheck = Invoke-Native $sh.Source @("scripts/verify-release-tag.sh", $tag) -Echo
+if ($tagCheck.ExitCode -ne 0) { Fail "$tag does not verify; not building" }
 
 # --- 3. Build the signed release APK ---------------------------------------
 if (-not (Test-Path (Join-Path $repoRoot "keystore.properties"))) {
@@ -186,8 +244,8 @@ if ($SkipBuild) {
     Write-Host "Reusing $apkPath" -ForegroundColor Yellow
 } else {
     Write-Host "Building the release APK..." -ForegroundColor Cyan
-    & (Join-Path $repoRoot "gradlew.bat") assembleRelease --no-daemon -q
-    if ($LASTEXITCODE -ne 0) { Fail "gradlew assembleRelease failed" }
+    $build = Invoke-Native (Join-Path $repoRoot "gradlew.bat") @("assembleRelease", "--no-daemon", "-q") -Echo
+    if ($build.ExitCode -ne 0) { Fail "gradlew assembleRelease failed" }
     if (-not (Test-Path $apkPath)) { Fail "expected a signed APK at $apkPath (an unsigned build writes app-release-unsigned.apk)" }
 }
 Assert-ReleaseCert $apkPath
@@ -213,8 +271,10 @@ $notesFile = Join-Path $distDir "openmouse-$tag.notes.md"
 # notes are not garbled.
 $previousEncoding = [Console]::OutputEncoding
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-try { $message = (git tag -l --format='%(contents)' $tag) -join "`n" }
+try { $notes = Invoke-Native git @("tag", "-l", "--format=%(contents)", $tag) }
 finally { [Console]::OutputEncoding = $previousEncoding }
+if ($notes.ExitCode -ne 0) { Fail "could not read the message of ${tag}: $(Get-NativeMessage $notes)" }
+$message = $notes.Stdout -join "`n"
 $cut = $message.IndexOf("-----BEGIN SSH SIGNATURE-----")
 if ($cut -ge 0) { $message = $message.Substring(0, $cut) }
 $message = $message.TrimEnd()
@@ -225,11 +285,18 @@ if ($message -notmatch '(?m)^#') {
 }
 [System.IO.File]::WriteAllText($notesFile, $message + "`n", (New-Object System.Text.UTF8Encoding($false)))
 
-gh release view $tag *> $null
-if ($LASTEXITCODE -eq 0) { Fail "a GitHub Release for $tag already exists; delete it or upload the asset with: gh release upload $tag $asset" }
+# Three outcomes. The release exists: refuse. gh says "release not found" (on
+# stderr, exit 1): the expected case for a new tag, go on. Anything else
+# (network, authentication, rate limit) is a lookup that failed, not an absent
+# release, so stop with what gh said rather than create blind.
+$lookup = Invoke-Native gh @("release", "view", $tag)
+if ($lookup.ExitCode -eq 0) { Fail "a GitHub Release for $tag already exists; delete it or upload the asset with: gh release upload $tag $asset" }
+if (@($lookup.Stderr | ForEach-Object { $_.Trim() }) -notcontains "release not found") {
+    Fail "could not check whether a GitHub Release for $tag exists (gh release view exited $($lookup.ExitCode)): $(Get-NativeMessage $lookup)"
+}
 
 $ghArgs = @("release", "create", $tag, $asset, "$asset.sha256", "--verify-tag", "--title", "OpenMouse $version", "--notes-file", $notesFile)
 if ($Draft) { $ghArgs += "--draft" }
-& gh @ghArgs
-if ($LASTEXITCODE -ne 0) { Fail "gh release create failed" }
+$create = Invoke-Native gh $ghArgs -Echo
+if ($create.ExitCode -ne 0) { Fail "gh release create failed" }
 Write-Host "Published $tag" -ForegroundColor Green
