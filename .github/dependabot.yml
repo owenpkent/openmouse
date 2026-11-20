@@ -18,6 +18,12 @@ updates:
     groups:
       gradle-minor-patch:
         update-types: [minor, patch]
+    # androidx.core 1.19 requires compileSdk 37 (its AAR metadata says so, and
+    # checkAarMetadata fails the build). Hold it until compileSdk moves to 37,
+    # which is planned together with targetSdk 37; drop this rule then.
+    ignore:
+      - dependency-name: androidx.core:core-ktx
+        versions: [">= 1.19"]
 
   - package-ecosystem: github-actions
     directory: /
