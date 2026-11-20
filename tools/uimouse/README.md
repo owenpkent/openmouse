@@ -61,13 +61,11 @@ documented at the top of `uimouse.c`.
   purpose: leaving and re-entering a cell re-arms it.
 - **The Pixel launcher never rotates.** Landscape scenarios run over the
   Settings app.
-- **The menu toggle moves when the grid opens** on a short screen (the strip
-  shifts up). `menu_cell_center` mirrors `MenuGeometry` and takes `expanded`.
+- **The menu toggle keeps its row open or closed**, but collapsed it is one
+  cell at the edge while open it spans the panel. `menu_cell_center` mirrors
+  `MenuGeometry` and takes `expanded`.
 - **screenrecord only emits frames on screen change**, so the driver nudges
   the pointer right after starting a recording or the opening state is cut.
-- **Opening the dock can move it under the pointer.** On a short screen the
-  strip shifts up to fit, so after the expand dwell fires the still pointer is
-  over whatever landed there. A cell is safe (the service re-anchors and locks
-  on it); the gap between rows is not (a jitter into the cell above arms it).
-  `menu_cell_center` picks a handle entry height that ends up inside row 0,
-  and `leave_dock` glides clear right after the expand.
+- **Opening the dock leaves the pointer on the toggle**, which never re-fires
+  until the pointer leaves, so `leave_dock` glides clear right after the
+  expand before steering to a cell.

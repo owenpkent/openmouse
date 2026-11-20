@@ -29,9 +29,7 @@ class MenuGeometryTest {
         itemH = 48f,
         gap = 4f,
         margin = 0f,
-        minColumns = 2,
-        handleW = 22f,
-        handleH = 96f,
+        minColumns = 1,
     )
 
     @Nested
@@ -43,15 +41,18 @@ class MenuGeometryTest {
         }
 
         @Test
-        fun collapsedCentersTheToggle() {
+        fun collapsedIsOneCellCenteredAtTheEdge() {
             val g = geometry()
             g.layout(1000, 1000, expanded = false)
 
-            // Toggle centered vertically: top = (1000 - 50) / 2 = 475.
-            assertBounds(g.toggle, 820f, 475f, 990f, 525f)
-            assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(830f, 500f, expanded = false))
+            // The expanded strip (350) fits below the center, so the toggle is
+            // centered: top = (1000 - 50) / 2 = 475. Collapsed it is one 80 x 50
+            // cell in the edge column (right = 1000 - margin 10).
+            assertBounds(g.toggle, 910f, 475f, 990f, 525f)
+            assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(950f, 500f, expanded = false))
+            assertNull(g.hitTest(830f, 500f, expanded = false)) // the inner column: the app
             // Items are not hit-tested while collapsed.
-            assertNull(g.hitTest(830f, 600f, expanded = false))
+            assertNull(g.hitTest(950f, 600f, expanded = false))
         }
 
         @Test
@@ -106,19 +107,32 @@ class MenuGeometryTest {
     inner class ShortScreens {
 
         @Test
-        fun tallScreenKeepsTheMinimumColumns() {
+        fun tallScreenKeepsOneColumn() {
             val g = productionGeometry()
             g.layout(400, 800, expanded = true)
+            assertEquals(1, g.columns)
+            assertEquals(48f, g.panelWidth, EPS)
+            // 13 rows: toggle 48 + 4 + 13*48 + 12*4 = 724, fits in 800.
+            assertEquals(724f, g.item(12).bottom - g.toggle.top, EPS)
+            assertFullyOnScreen(g, 400, 800, itemCount = 13)
+            assertNoOverlap(g, 13)
+            // The single column stacks straight down, flush with the right edge.
+            for (i in 0 until 13) assertEquals(352f, g.item(i).left, EPS)
+        }
+
+        @Test
+        fun smallPhoneInPortraitGetsASecondColumn() {
+            // 360 x 640 dp: one column (724) runs off; two (412) fit.
+            val g = productionGeometry()
+            g.layout(360, 640, expanded = true)
             assertEquals(2, g.columns)
-            assertEquals(100f, g.panelWidth, EPS) // 2*48 + 4
-            // 7 rows: toggle 48 + 4 + 7*48 + 6*4 = 412, fits in 800 without a shift.
-            assertEquals(412f, g.item(12).bottom - g.toggle.top, EPS)
+            assertFullyOnScreen(g, 360, 640, itemCount = 13)
         }
 
         @Test
         fun landscapeWidensTheGridSoTheLastEntryStaysOnScreen() {
-            // 800 x 400 dp landscape: two columns (412 tall) would put Pause
-            // below the screen. Three columns make 5 rows (308 tall).
+            // 800 x 400 dp landscape: one column (724 tall) or two (412) would
+            // put Pause below the screen. Three columns make 5 rows (308 tall).
             val g = productionGeometry()
             g.layout(800, 400, expanded = true)
             assertEquals(3, g.columns)
@@ -169,41 +183,38 @@ class MenuGeometryTest {
         }
 
         @Test
-        fun collapsedIsASlimHandleFlushWithTheEdge() {
-            // Collapsed, only a 22 x 96 handle remains, centered on the toggle
-            // row's vertical center and flush with the right edge.
+        fun collapsedToggleSitsWhereTheOpenStripPutsIt() {
+            // Landscape, three columns: the open strip (308) is raised to fit
+            // (top 400 - 308 = 92), and the collapsed cell already sits there,
+            // flush with the right edge.
             val g = productionGeometry()
             g.layout(800, 400, expanded = false)
             assertEquals(3, g.columns) // the column count still comes from the expanded strip
-            assertBounds(g.toggle, 778f, 152f, 800f, 248f) // center y 200
-            assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(799f, 200f, expanded = false))
-            assertNull(g.hitTest(770f, 200f, expanded = false)) // just inboard of the handle: the app
-            // Opening widens the toggle to the panel; on this short screen the
-            // whole strip (308 tall) also shifts up to fit, as it always has.
+            assertBounds(g.toggle, 752f, 92f, 800f, 140f)
+            assertEquals(MenuGeometry.TOGGLE_INDEX, g.hitTest(799f, 116f, expanded = false))
+            assertNull(g.hitTest(740f, 116f, expanded = false)) // just inboard of the cell: the app
+            // Opening widens the toggle inward to the panel and keeps its row.
             g.layout(800, 400, expanded = true)
-            assertEquals(648f, g.toggle.left, EPS)
-            assertEquals(800f, g.toggle.right, EPS)
-            assertEquals(92f, g.toggle.top, EPS) // 400 - 308
-            // On a tall screen nothing shifts: the row is 48 tall around the handle's center.
-            g.layout(400, 800, expanded = false)
-            val handleCenter = (g.toggle.top + g.toggle.bottom) / 2f
-            g.layout(400, 800, expanded = true)
-            assertEquals(handleCenter, (g.toggle.top + g.toggle.bottom) / 2f, EPS)
+            assertBounds(g.toggle, 648f, 92f, 800f, 140f)
         }
 
         @Test
-        fun leftDockHandleIsFlushWithTheLeftEdge() {
+        fun portraitPhoneTogglePlaceIsTheSameOpenOrClosed() {
+            // 412 x 915: one column, 724 tall, raised from the center (433.5)
+            // to 915 - 724 = 191 so Pause stays on screen.
+            val g = productionGeometry()
+            g.layout(412, 915, expanded = false)
+            assertBounds(g.toggle, 364f, 191f, 412f, 239f)
+            g.layout(412, 915, expanded = true)
+            assertBounds(g.toggle, 364f, 191f, 412f, 239f)
+            assertEquals(915f, g.item(12).bottom, EPS)
+        }
+
+        @Test
+        fun leftDockCollapsedCellIsFlushWithTheLeftEdge() {
             val g = productionGeometry()
             g.layout(800, 400, expanded = false, dockRight = false)
-            assertBounds(g.toggle, 0f, 152f, 22f, 248f)
-        }
-
-        @Test
-        fun withoutAHandleTheCollapsedToggleIsTheFullRow() {
-            // The default keeps the old behaviour for callers that want it.
-            val g = geometry()
-            g.layout(1000, 1000, expanded = false)
-            assertBounds(g.toggle, 820f, 475f, 990f, 525f)
+            assertBounds(g.toggle, 0f, 92f, 48f, 140f)
         }
 
         @Test
@@ -267,7 +278,7 @@ class MenuGeometryTest {
         fun negativeItemCountBehavesAsEmpty() {
             val g = MenuGeometry(itemCount = -3, itemW = 80f, itemH = 50f, gap = 10f, margin = 10f)
             g.layout(1000, 1000, expanded = true)
-            assertBounds(g.toggle, 820f, 475f, 990f, 525f)
+            assertBounds(g.toggle, 910f, 475f, 990f, 525f) // one column by default
             assertNull(g.hitTest(830f, 560f, expanded = true))
         }
 
