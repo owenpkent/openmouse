@@ -1,7 +1,7 @@
 [versions]
 # AGP 9 ships built-in Kotlin support, so there is no separate Kotlin plugin
 # version to manage here.
-agp = "9.5.1"
+agp = "9.5.2"
 coreKtx = "1.18.0"
 appcompat = "1.8.0"
 material = "1.14.0"
