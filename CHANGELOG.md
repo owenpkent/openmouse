@@ -7,6 +7,15 @@ tagged release.
 
 ## [Unreleased]
 
+### Changed
+
+- The side dock is one column of glyph cells instead of two. A screen too
+  short for the whole column (a small phone, or any phone in landscape) still
+  widens it a column at a time, so Pause / Resume stays reachable.
+- Collapsed, the dock is the hamburger cell itself instead of a slim grip
+  handle, and it sits where it will be once open: opening and closing never
+  move it out from under the pointer, in portrait or landscape.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

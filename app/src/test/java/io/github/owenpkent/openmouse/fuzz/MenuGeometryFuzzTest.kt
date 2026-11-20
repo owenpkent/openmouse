@@ -22,6 +22,8 @@ import kotlin.math.abs
  *   the menu is expanded, and null means neither the toggle nor any visible
  *   item contains it;
  * - the expanded toggle spans exactly the panel width;
+ * - the toggle has the same top and bottom collapsed and expanded, so opening
+ *   or closing never moves it out from under a still pointer;
  * - the column count stays between the preferred count and the entry count.
  *
  * Without `JAZZER_FUZZ=1` this only replays the seed corpus as a JUnit test.
@@ -39,8 +41,6 @@ class MenuGeometryFuzzTest {
             gap = data.consumeFloat(),
             margin = data.consumeFloat(),
             minColumns = columns,
-            handleW = if (data.consumeBoolean()) data.consumeFloat() else null,
-            handleH = if (data.consumeBoolean()) data.consumeFloat() else null,
         )
         val visibleItems = itemCount.coerceAtLeast(0)
         val minColumns = columns.coerceAtLeast(1)
@@ -49,7 +49,17 @@ class MenuGeometryFuzzTest {
         repeat(layouts) {
             val expanded = data.consumeBoolean()
             val dockRight = data.consumeBoolean()
-            g.layout(data.consumeInt(), data.consumeInt(), expanded, dockRight)
+            val width = data.consumeInt()
+            val height = data.consumeInt()
+
+            // The toggle row must not depend on the expand state. Lay out the
+            // other state first so the checks below see the requested one.
+            g.layout(width, height, !expanded, dockRight)
+            val otherTop = g.toggle.top
+            val otherBottom = g.toggle.bottom
+            g.layout(width, height, expanded, dockRight)
+            assertSameOrBothNaN(otherTop, g.toggle.top, "toggle top moved on expand/collapse")
+            assertSameOrBothNaN(otherBottom, g.toggle.bottom, "toggle bottom moved on expand/collapse")
 
             // The grid widens on a short screen but never below the preferred
             // count, and never past one entry per column.
@@ -58,7 +68,7 @@ class MenuGeometryFuzzTest {
 
             val toggle = g.toggle
             val toggleWidth = toggle.right - toggle.left
-            // Collapsed, the toggle is the handle (any width); expanded it spans the panel.
+            // Collapsed, the toggle is one cell at the edge; expanded it spans the panel.
             if (expanded && toggleWidth.isFinite() && g.panelWidth.isFinite()) {
                 // Relative tolerance: left + panelWidth - left loses low bits for huge values.
                 val tolerance = 1e-3f * (1f + abs(g.panelWidth)) + 1e-3f * abs(toggle.left)
@@ -94,5 +104,11 @@ class MenuGeometryFuzzTest {
                 }
             }
         }
+    }
+
+    // NaN != NaN, and a fuzzed NaN size makes both layouts NaN alike.
+    private fun assertSameOrBothNaN(expected: Float, actual: Float, message: String) {
+        if (expected.isNaN() && actual.isNaN()) return
+        assertEquals(expected, actual, message)
     }
 }
