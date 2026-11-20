@@ -320,7 +320,6 @@ DWELL = 1.0  # the default dwell time, seconds
 
 
 CELL_DP, GAP_DP, MARGIN_DP = 48, 4, 0  # GestureMenu's dock: square glyph cells flush with the edge
-HANDLE_W_DP, HANDLE_H_DP = 22, 96  # the collapsed handle
 
 
 def panel_left(width, columns, density=DENSITY):
@@ -331,33 +330,18 @@ def panel_left(width, columns, density=DENSITY):
 def menu_cell_center(width, height, index, columns, expanded=True, density=DENSITY, expanded_items=13):
     """
     Mirror MenuGeometry for the production menu (right dock) to find a cell.
-    The toggle sits at its collapsed centre until the grid opens; on a short
-    screen the whole strip then shifts up, so ask for the collapsed position
-    when steering to the toggle of a collapsed menu.
+    The toggle keeps one row open or closed: centred, raised only as far as
+    the open strip needs to fit. Collapsed it is one cell at the edge.
     """
     item_w, item_h, gap, margin = CELL_DP * density, CELL_DP * density, GAP_DP * density, MARGIN_DP * density
     panel = columns * item_w + (columns - 1) * gap
     left = width - margin - panel
-    rows = -(-expanded_items // columns) if expanded else 0
-    strip = item_h + gap + rows * item_h + (rows - 1) * gap if rows else item_h
+    rows = -(-expanded_items // columns)
+    strip = item_h + gap + rows * item_h + (rows - 1) * gap
     top = max(min((height - item_h) / 2, height - strip), 0)
     if index == "toggle":
         if not expanded:
-            # The slim handle, flush with the right edge. Opening the dock on a
-            # short screen shifts the strip up, and whatever then sits under the
-            # still pointer matters: a cell is safe (the service re-anchors and
-            # locks on it), the gap between two rows is not (a jitter into the
-            # cell above arms it). So enter at a height that will be inside
-            # row 0 after the shift, when that height is within the handle.
-            cy = top + item_h / 2
-            rows_open = -(-expanded_items // columns)
-            strip_open = item_h + gap + rows_open * item_h + (rows_open - 1) * gap
-            top_open = max(min((height - item_h) / 2, height - strip_open), 0)
-            row0_cy = top_open + item_h + gap + item_h / 2
-            handle_h = HANDLE_H_DP * density
-            if abs(row0_cy - cy) < handle_h / 2 - 10:
-                cy = row0_cy
-            return int(width - HANDLE_W_DP * density / 2), int(cy)
+            return int(width - margin - item_w / 2), int(top + item_h / 2)
         return int(left + panel / 2), int(top + item_h / 2)
     grid_top = top + item_h + gap
     r, c = divmod(index, columns)
@@ -376,22 +360,22 @@ def clip_portrait(dev, out_dir, icon):
     dev.reset_service()
     dev.start_recording("/sdcard/clip1.mp4")
     time.sleep(0.5)
-    pl = panel_left(W, 2)
+    pl = panel_left(W, 1)
     step(dev, "toggle: expand")
-    dev.goto_cell(*menu_cell_center(W, H, "toggle", 2, expanded=False), pl)
+    dev.goto_cell(*menu_cell_center(W, H, "toggle", 1, expanded=False), pl)
     dev.rest(DWELL + 0.4)
     dev.leave_dock()
     step(dev, "pause")
-    dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 2), pl)
+    dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 1), pl)
     dev.rest(DWELL + 0.6)  # the entry now reads Resume
     step(dev, "rest over the app while paused")
     dev.goto(300, 900)
     dev.rest(2.5)  # nothing fires
     step(dev, "resume")
-    dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 2), pl)
+    dev.goto_cell(*menu_cell_center(W, H, PAUSE_INDEX, 1), pl)
     dev.rest(DWELL + 0.6)
     step(dev, "toggle: collapse")
-    dev.goto_cell(*menu_cell_center(W, H, "toggle", 2), pl)
+    dev.goto_cell(*menu_cell_center(W, H, "toggle", 1), pl)
     dev.rest(DWELL + 0.6)
     step(dev, "dwell-click the icon")
     dev.goto(*icon)

@@ -31,9 +31,9 @@ enum class GestureAction {
 
 /**
  * The on-screen gesture menu: a dock flush with one screen edge. Collapsed it
- * is a slim handle; expanded it is a hamburger row over a grid of square
- * glyph cells (two columns, wider on a short screen so the whole grid stays
- * reachable).
+ * is a single hamburger cell; expanded, that cell heads a column of square
+ * glyph cells (wider on a short screen such as a phone in landscape, so the
+ * whole grid stays reachable). The hamburger keeps its place in both states.
  *
  * It is not a real View hierarchy. The full-screen CursorView owns all pointer
  * input, so the menu is drawn by that view and hit-tested against the cursor
@@ -82,9 +82,7 @@ class GestureMenu(private val context: Context) {
         itemH = cell,
         gap = GAP_DP * d,
         margin = MARGIN_DP * d,
-        minColumns = 2,
-        handleW = HANDLE_W_DP * d,
-        handleH = HANDLE_H_DP * d,
+        minColumns = 1,
     )
 
     private var lastWidth = 0
@@ -190,14 +188,9 @@ class GestureMenu(private val context: Context) {
         val stroke = strokePaint
         when (action) {
             GestureAction.TOGGLE -> {
-                if (expanded) {
-                    // Hamburger: three bars, the toggle row is wider than a cell.
-                    val w = h * 1.1f
-                    for (i in -1..1) canvas.drawLine(cx - w, cy + i * h * 0.6f, cx + w, cy + i * h * 0.6f, stroke)
-                } else {
-                    // Grip: three dots down the slim handle.
-                    for (i in -1..1) canvas.drawCircle(cx, cy + i * h * 0.55f, h * 0.16f, glyphFillPaint)
-                }
+                // Hamburger: three bars, the same open or closed.
+                val w = h * 1.1f
+                for (i in -1..1) canvas.drawLine(cx - w, cy + i * h * 0.6f, cx + w, cy + i * h * 0.6f, stroke)
             }
 
             GestureAction.TAP -> {
@@ -306,19 +299,16 @@ class GestureMenu(private val context: Context) {
     }
 
     companion object {
-        /** Square glyph cells; small enough that two columns of thirteen fit a phone in portrait. */
+        /**
+         * Square glyph cells; small enough that one column of thirteen under
+         * the toggle (724 dp) fits a typical phone in portrait. A shorter
+         * screen gets a second column, and more in landscape.
+         */
         const val CELL_DP = 48f
         const val GAP_DP = 4f
 
         /** Flush with the screen edge: the dock is part of the edge, not a floating panel. */
         const val MARGIN_DP = 0f
-
-        /**
-         * The collapsed handle: narrow, because the screen edge stops the
-         * pointer anyway, and tall so it is easy to find by height.
-         */
-        const val HANDLE_W_DP = 22f
-        const val HANDLE_H_DP = 96f
 
         /** The glyph box inside a cell. */
         private const val GLYPH_DP = 24f

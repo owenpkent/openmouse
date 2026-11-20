@@ -9,15 +9,18 @@ data class Bounds(val left: Float, val top: Float, val right: Float, val bottom:
  * Pure layout and hit-testing for the gesture menu, with no Android dependencies.
  *
  * The menu is a vertical strip docked to the right edge. Collapsed, it is only
- * a slim **handle** ([handleW] x [handleH]) flush with the edge, so it covers
- * almost nothing; the screen edge stops the pointer, which makes a narrow
- * target there easy to reach with a mouse. Expanded, the toggle becomes a
- * full-width row with a grid of [itemCount] entries below it. The grid is
- * [minColumns] wide on a tall screen; on a short one it widens, one column at a
- * time, until the expanded strip fits the height or the screen width runs out,
- * so the last entries (Pause / Resume among them) stay reachable in landscape.
- * The whole strip is centered vertically, and the toggle keeps its vertical
- * center across the two states.
+ * the toggle: one [itemW] x [itemH] cell flush with the edge. Expanded, the
+ * toggle becomes a full-width row with a grid of [itemCount] entries below it.
+ * The grid is [minColumns] wide on a tall screen; on a short one it widens, one
+ * column at a time, until the expanded strip fits the height or the screen
+ * width runs out, so the last entries (Pause / Resume among them) stay
+ * reachable in landscape.
+ *
+ * The toggle sits where it will be once the grid is open, collapsed or not:
+ * at the vertical center if the whole expanded strip fits below it, otherwise
+ * raised just enough, never above the top. Opening and closing therefore never
+ * move it out from under a still pointer, so a dwell user closes the dock in
+ * the place they opened it.
  *
  * Degenerate construction values are clamped rather than trusted (a negative
  * item count becomes 0, fewer than one column becomes 1), so the layout is
@@ -29,17 +32,10 @@ class MenuGeometry(
     private val itemH: Float,
     private val gap: Float,
     private val margin: Float,
-    minColumns: Int = 2,
-    handleW: Float? = null,
-    handleH: Float? = null,
+    minColumns: Int = 1,
 ) {
     private val itemCount = itemCount.coerceAtLeast(0)
     private val minColumns = minColumns.coerceAtLeast(1)
-
-    // The collapsed toggle. Defaults to the full toggle row, so a caller that
-    // wants no distinct handle gets the old behaviour.
-    private val handleW: Float? = handleW
-    private val handleH: Float = handleH ?: itemH
 
     /** The toggle (hamburger) row. Valid after [layout]. */
     var toggle: Bounds = Bounds(0f, 0f, 0f, 0f)
@@ -67,26 +63,20 @@ class MenuGeometry(
         val left = if (dockRight) width - margin - panelWidth else margin
         val right = left + panelWidth
 
-        val rows = if (expanded) rows(columns) else 0
-        val stripHeight = stripHeight(rows)
-
-        // Anchor the toggle at the vertical center it has when collapsed, so it
-        // does not jump when the grid expands. Shift the whole strip up only if
-        // the expanded grid would run off the bottom, and never above the top.
-        val collapsedTop = (height - itemH) / 2f
-        var top = collapsedTop
-        val maxTop = height - stripHeight
+        // Place the toggle for the expanded strip even while collapsed, so it
+        // keeps one place across the two states: centered, raised only as far
+        // as the open grid needs to stay on screen, and never above the top.
+        var top = (height - itemH) / 2f
+        val maxTop = height - stripHeight(rows(columns))
         if (top > maxTop) top = maxTop
         if (top < 0f) top = 0f
 
         if (!expanded) {
-            // The handle sits at the edge, sharing the toggle row's vertical center.
-            val hw = handleW ?: panelWidth
-            val hTop = top + (itemH - handleH) / 2f
+            // One cell in the edge column of the strip.
             toggle = if (dockRight) {
-                Bounds(right - hw, hTop, right, hTop + handleH)
+                Bounds(right - itemW, top, right, top + itemH)
             } else {
-                Bounds(left, hTop, left + hw, hTop + handleH)
+                Bounds(left, top, left + itemW, top + itemH)
             }
             return
         }

@@ -161,8 +161,8 @@ unclear (the "Midas touch" problem: a resting pointer looks like an aiming one):
   cleared by deliberate movement and nothing else. That is what keeps a tremor
   across a cell edge from selecting the neighbour after a menu choice, and what
   keeps the dock from selecting a cell it laid out beside a still pointer when
-  it opened (the collapsed handle is taller than a cell, so opening it can leave
-  the pointer in a gap with cells 1 px away). Leaving a cell for the app locks
+  it opened (the toggle keeps its row, so the pointer that opened the dock sits
+  on the toggle with the first cell 4 dp below). Leaving a cell for the app locks
   and the ordinary distance applies from the rest point, so a slip into the gap
   between cells, or a menu that re-lays out under a still pointer (the strip
   shifts on short screens), never taps the app. After a menu choice, a dock
@@ -241,15 +241,16 @@ path" above).
 
 The strip is a dock flush with one screen edge, laid out by the pure
 `MenuGeometry`: square glyph cells (symbols, not words, so they stay small and
-need no translation) under a toggle that is anchored at its collapsed center
-(so it does not jump when the grid expands) and clamped to stay on screen on
-short/landscape displays. The grid is two columns wide on a tall screen; when the expanded strip would still run off a
-short one (a phone in landscape) it widens a column at a time until it fits or
-the screen width runs out, so the last row, Pause / Resume, stays reachable
-however the device is held. While collapsed, only a slim handle on the edge is
-a hit target (the screen edge stops the pointer, so a narrow target there is
-easy to hit with a mouse) and the rest of the screen clicks through; the
-left/right dock setting moves it off a busy edge.
+need no translation) under a hamburger toggle. The grid is one column on a tall screen; when the
+expanded strip would still run off a short one (a small phone, or a phone in
+landscape) it widens a column at a time until it fits or the screen width runs
+out, so the last row, Pause / Resume, stays reachable however the device is
+held. The toggle has one row whether the dock is open or closed: centered, or
+raised just enough for the open strip to fit, never above the top. So opening
+and closing never move it out from under a still pointer, and a dwell user
+closes the dock where they opened it. While collapsed, only the toggle (one
+cell flush with the edge) is a hit target and the rest of the screen clicks
+through; the left/right dock setting moves it off a busy edge.
 
 ### One-shot vs sticky modes
 
