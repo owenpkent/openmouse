@@ -7,6 +7,12 @@ tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- Two opacity sliders in Settings, 30% to 100% (default 100%): one for the
+  cross-hair and its badge, one for the gesture dock. The dock cell under the
+  cursor always stays fully opaque so the dwell target is clear.
+
 ### Changed
 
 - The side dock is one column of glyph cells instead of two. A screen too
@@ -15,6 +21,12 @@ tagged release.
 - Collapsed, the dock is the hamburger cell itself instead of a slim grip
   handle, and it sits where it will be once open: opening and closing never
   move it out from under the pointer, in portrait or landscape.
+
+### Fixed
+
+- A screen reader setting a Settings slider between its ticks (for example
+  35%) no longer leaves a value that crashes Settings when it is reopened.
+  Every slider now snaps incoming and stored values to its own steps.
 
 ## [0.2.0] - 2026-11-09
 

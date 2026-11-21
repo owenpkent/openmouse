@@ -1,6 +1,8 @@
 package io.github.owenpkent.openmouse
 
 import android.content.Context
+import android.os.Bundle
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
@@ -15,6 +17,7 @@ import com.google.android.material.slider.Slider
 import io.github.owenpkent.openmouse.settings.OpenMouseSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -134,6 +137,60 @@ class SettingsActivityTest {
             val last = OpenMouseSettings.CURSOR_COLORS.size - 1
             onView(withText(colorName(last))).check(matches(isChecked()))
         }
+    }
+
+    @Test
+    fun offGridStoredValuesSnapToATick() {
+        // A Slider also throws on a value between its ticks. 35% is what an
+        // accessibility service's set-progress action used to leave stored.
+        Device.context.getSharedPreferences(OpenMouseSettings.PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putFloat("cursor_opacity", 0.35f)
+            .putFloat("dock_opacity", 0.55f)
+            .putInt("dwell_ms", 1550)
+            .putFloat("cursor_scale", 1.46f)
+            .commit()
+
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                assertEquals(40f, a.slider(R.id.cursorOpacitySlider).value, 0.01f)
+                assertEquals(60f, a.slider(R.id.dockOpacitySlider).value, 0.01f)
+                assertEquals(1600f, a.slider(R.id.dwellSlider).value)
+                assertEquals(150f, a.slider(R.id.sizeSlider).value, 0.01f)
+            }
+            onView(withId(R.id.cursorOpacityLabel))
+                .check(matches(withText(string(R.string.settings_cursor_opacity_value, 40))))
+        }
+    }
+
+    @Test
+    fun accessibilitySetProgressBetweenTicksIsSnappedAndSurvivesReopen() {
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                assertTrue(a.slider(R.id.cursorOpacitySlider).setProgressByAccessibility(35f))
+                assertTrue(a.slider(R.id.dockOpacitySlider).setProgressByAccessibility(35f))
+                assertEquals(40f, a.slider(R.id.cursorOpacitySlider).value, 0.01f)
+                assertEquals(40f, a.slider(R.id.dockOpacitySlider).value, 0.01f)
+            }
+            assertEquals(0.4f, settings.cursorOpacity, 0.001f)
+            assertEquals(0.4f, settings.dockOpacity, 0.001f)
+            onView(withId(R.id.cursorOpacityLabel))
+                .check(matches(withText(string(R.string.settings_cursor_opacity_value, 40))))
+            onView(withId(R.id.dockOpacityLabel))
+                .check(matches(withText(string(R.string.settings_dock_opacity_value, 40))))
+        }
+        // Reopening is where an off-step stored value used to throw.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                assertEquals(40f, a.slider(R.id.cursorOpacitySlider).value, 0.01f)
+                assertEquals(40f, a.slider(R.id.dockOpacitySlider).value, 0.01f)
+            }
+        }
+    }
+
+    /** What a screen reader sends: an absolute progress to the slider's first (virtual) thumb. */
+    private fun Slider.setProgressByAccessibility(progress: Float): Boolean {
+        val args = Bundle().apply { putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, progress) }
+        return accessibilityNodeProvider!!.performAction(0, android.R.id.accessibilityActionSetProgress, args)
     }
 
     private fun SettingsActivity.slider(id: Int): Slider = findViewById(id)

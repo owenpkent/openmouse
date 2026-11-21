@@ -118,8 +118,8 @@ screen.
 - Scroll modes repeat while the pointer rests: the first notch after a full
   dwell, then one every repeat interval
 - Settings screen (applied live): dwell time, movement tolerance, re-arm distance
-  after a click, scroll repeat interval, cursor size, cursor color, menu side,
-  and a dwell-click on/off toggle
+  after a click, scroll repeat interval, cursor size, cursor and dock opacity,
+  cursor color, menu side, and a dwell-click on/off toggle
 - On Android 14+ the overlay is non-touchable, so the touchscreen keeps working
   normally and a stray finger can never move the cursor or fire a click
 - Update check against GitHub Releases in the sideload APK (once per launch,
