@@ -22,6 +22,12 @@ tagged release.
   handle, and it sits where it will be once open: opening and closing never
   move it out from under the pointer, in portrait or landscape.
 
+### Fixed
+
+- A screen reader setting a Settings slider between its ticks (for example
+  35%) no longer leaves a value that crashes Settings when it is reopened.
+  Every slider now snaps incoming and stored values to its own steps.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

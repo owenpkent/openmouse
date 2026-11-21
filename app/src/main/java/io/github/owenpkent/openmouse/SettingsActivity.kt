@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import io.github.owenpkent.openmouse.settings.OpenMouseSettings
+import io.github.owenpkent.openmouse.settings.SliderGrid
 import io.github.owenpkent.openmouse.update.UpdateChecker
 import io.github.owenpkent.openmouse.update.UpdatePrompt
 
@@ -65,60 +66,62 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupSliders() {
-        val dwell = findViewById<Slider>(R.id.dwellSlider)
-        dwell.value = settings.dwellTimeMs.toFloat()
-        updateDwellLabel(settings.dwellTimeMs)
-        dwell.addOnChangeListener { _, value, _ ->
-            settings.dwellTimeMs = value.toLong()
-            updateDwellLabel(value.toLong())
-        }
+        findViewById<Slider>(R.id.dwellSlider).bind(
+            settings.dwellTimeMs.toFloat(),
+            show = { updateDwellLabel(it.toLong()) },
+            write = { settings.dwellTimeMs = it.toLong() },
+        )
+        findViewById<Slider>(R.id.moveSlider).bind(
+            settings.moveThresholdDp,
+            show = ::updateMoveLabel,
+            write = { settings.moveThresholdDp = it },
+        )
+        findViewById<Slider>(R.id.postActionSlider).bind(
+            settings.postActionThresholdDp,
+            show = ::updatePostActionLabel,
+            write = { settings.postActionThresholdDp = it },
+        )
+        findViewById<Slider>(R.id.repeatSlider).bind(
+            settings.scrollRepeatMs.toFloat(),
+            show = { updateRepeatLabel(it.toLong()) },
+            write = { settings.scrollRepeatMs = it.toLong() },
+        )
+        findViewById<Slider>(R.id.sizeSlider).bind(
+            settings.cursorScale * 100f,
+            show = { updateSizeLabel(it / 100f) },
+            write = { settings.cursorScale = it / 100f },
+        )
+        findViewById<Slider>(R.id.cursorOpacitySlider).bind(
+            settings.cursorOpacity * 100f,
+            show = { updateOpacityLabel(cursorOpacityLabel, R.string.settings_cursor_opacity_value, it) },
+            write = { settings.cursorOpacity = it / 100f },
+        )
+        findViewById<Slider>(R.id.dockOpacitySlider).bind(
+            settings.dockOpacity * 100f,
+            show = { updateOpacityLabel(dockOpacityLabel, R.string.settings_dock_opacity_value, it) },
+            write = { settings.dockOpacity = it / 100f },
+        )
+    }
 
-        val move = findViewById<Slider>(R.id.moveSlider)
-        move.value = settings.moveThresholdDp
-        updateMoveLabel(settings.moveThresholdDp)
-        move.addOnChangeListener { _, value, _ ->
-            settings.moveThresholdDp = value
-            updateMoveLabel(value)
-        }
-
-        val postAction = findViewById<Slider>(R.id.postActionSlider)
-        postAction.value = settings.postActionThresholdDp
-        updatePostActionLabel(settings.postActionThresholdDp)
-        postAction.addOnChangeListener { _, value, _ ->
-            settings.postActionThresholdDp = value
-            updatePostActionLabel(value)
-        }
-
-        val repeat = findViewById<Slider>(R.id.repeatSlider)
-        repeat.value = settings.scrollRepeatMs.toFloat()
-        updateRepeatLabel(settings.scrollRepeatMs)
-        repeat.addOnChangeListener { _, value, _ ->
-            settings.scrollRepeatMs = value.toLong()
-            updateRepeatLabel(value.toLong())
-        }
-
-        val size = findViewById<Slider>(R.id.sizeSlider)
-        size.value = settings.cursorScale * 100f
-        updateSizeLabel(settings.cursorScale)
-        size.addOnChangeListener { _, value, _ ->
-            settings.cursorScale = value / 100f
-            updateSizeLabel(value / 100f)
-        }
-
-        val cursorOpacity = findViewById<Slider>(R.id.cursorOpacitySlider)
-        cursorOpacity.value = percent(settings.cursorOpacity)
-        updateOpacityLabel(cursorOpacityLabel, R.string.settings_cursor_opacity_value, settings.cursorOpacity)
-        cursorOpacity.addOnChangeListener { _, value, _ ->
-            settings.cursorOpacity = value / 100f
-            updateOpacityLabel(cursorOpacityLabel, R.string.settings_cursor_opacity_value, value / 100f)
-        }
-
-        val dockOpacity = findViewById<Slider>(R.id.dockOpacitySlider)
-        dockOpacity.value = percent(settings.dockOpacity)
-        updateOpacityLabel(dockOpacityLabel, R.string.settings_dock_opacity_value, settings.dockOpacity)
-        dockOpacity.addOnChangeListener { _, value, _ ->
-            settings.dockOpacity = value / 100f
-            updateOpacityLabel(dockOpacityLabel, R.string.settings_dock_opacity_value, value / 100f)
+    /**
+     * Shows [stored] and writes every change through. Every value is snapped to
+     * the slider's own tick grid first ([SliderGrid]): a Slider throws on an
+     * off-step value, and an accessibility service's set-progress action skips
+     * step snapping, so 35% would be saved and Settings would crash on reopen.
+     * An off-grid change is put back on the grid, which re-enters this listener
+     * with the snapped value, so only grid values are ever shown or stored.
+     */
+    private fun Slider.bind(stored: Float, show: (Float) -> Unit, write: (Float) -> Unit) {
+        value = SliderGrid.snap(stored, valueFrom, valueTo, stepSize)
+        show(value)
+        addOnChangeListener { slider, changed, _ ->
+            val snapped = SliderGrid.snap(changed, slider.valueFrom, slider.valueTo, slider.stepSize)
+            if (snapped != changed) {
+                slider.value = snapped
+            } else {
+                write(changed)
+                show(changed)
+            }
         }
     }
 
@@ -138,11 +141,8 @@ class SettingsActivity : AppCompatActivity() {
         repeatLabel.text = getString(R.string.settings_scroll_repeat_value, ms.toInt())
     }
 
-    // Rounded so a stored 0.7f (70.00001 after * 100) still lands on a slider step.
-    private fun percent(fraction: Float) = Math.round(fraction * 100f).toFloat()
-
-    private fun updateOpacityLabel(label: TextView, format: Int, fraction: Float) {
-        label.text = getString(format, Math.round(fraction * 100f))
+    private fun updateOpacityLabel(label: TextView, format: Int, percent: Float) {
+        label.text = getString(format, Math.round(percent))
     }
 
     private fun updateSizeLabel(scale: Float) {
