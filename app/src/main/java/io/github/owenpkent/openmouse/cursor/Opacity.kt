@@ -17,7 +17,4 @@ object Opacity {
 
     /** The 0..255 alpha for [opacity], after clamping. */
     fun toAlpha(opacity: Float): Int = Math.round(clamp(opacity) * 255f)
-
-    /** Alpha for a dock cell: the cell under the cursor is always fully opaque. */
-    fun cellAlpha(dockOpacity: Float, hovered: Boolean): Int = if (hovered) 255 else toAlpha(dockOpacity)
 }

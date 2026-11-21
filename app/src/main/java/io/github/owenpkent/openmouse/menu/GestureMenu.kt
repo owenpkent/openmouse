@@ -98,6 +98,7 @@ class GestureMenu(private val context: Context) {
     private var lastWidth = 0
     private var lastHeight = 0
     private val tmp = RectF()
+    private val layerRect = RectF()
     private val path = Path()
 
     private val bgPaint = fillPaint(context, R.color.menu_item_bg)
@@ -174,27 +175,58 @@ class GestureMenu(private val context: Context) {
     }
 
     fun draw(canvas: Canvas, cursorX: Float, cursorY: Float) {
-        drawCell(canvas, geometry.toggle, GestureAction.TOGGLE, cursorX, cursorY)
-        if (expanded) {
-            for (i in items.indices) drawCell(canvas, geometry.item(i), items[i], cursorX, cursorY)
+        val alpha = Opacity.toAlpha(opacity)
+        // A cell's background and glyph overlap, so per-paint alpha would let the
+        // glyph show through the fill. Cells never overlap each other, so one
+        // layer over the whole strip fades every cell as a unit: one offscreen
+        // pass per frame, not one per cell. The cell under the cursor is drawn
+        // after the layer, fully opaque, so the user always sees what a dwell
+        // would select. At full opacity there is no layer at all.
+        var save = -1
+        if (alpha < 255) {
+            stripBounds(layerRect)
+            save = canvas.saveLayerAlpha(layerRect, alpha)
+        }
+        var hoveredIndex = NONE
+        forEachCell { index, b, action ->
+            if (hoveredIndex == NONE && b.contains(cursorX, cursorY)) {
+                hoveredIndex = index
+            } else {
+                drawCell(canvas, b, action, hovered = false)
+            }
+        }
+        if (save >= 0) canvas.restoreToCount(save)
+        if (hoveredIndex != NONE) {
+            forEachCell { index, b, action -> if (index == hoveredIndex) drawCell(canvas, b, action, hovered = true) }
         }
     }
 
-    private fun drawCell(canvas: Canvas, b: Bounds, action: GestureAction, cursorX: Float, cursorY: Float) {
+    /** The toggle, then the grid cells when expanded; the toggle's index is [MenuGeometry.TOGGLE_INDEX]. */
+    private inline fun forEachCell(block: (Int, Bounds, GestureAction) -> Unit) {
+        block(MenuGeometry.TOGGLE_INDEX, geometry.toggle, GestureAction.TOGGLE)
+        if (expanded) {
+            for (i in items.indices) block(i, geometry.item(i), items[i])
+        }
+    }
+
+    /** The smallest rectangle holding every visible cell, written into [out]. */
+    private fun stripBounds(out: RectF) {
+        val t = geometry.toggle
+        out.set(t.left, t.top, t.right, t.bottom)
+        if (expanded) {
+            for (i in items.indices) {
+                val b = geometry.item(i)
+                out.union(b.left, b.top, b.right, b.bottom)
+            }
+        }
+    }
+
+    private fun drawCell(canvas: Canvas, b: Bounds, action: GestureAction, hovered: Boolean) {
         tmp.set(b.left, b.top, b.right, b.bottom)
-        val hovered = b.contains(cursorX, cursorY)
-        val alpha = Opacity.cellAlpha(opacity, hovered)
-        // The background and glyph overlap, so a translucent cell is drawn into
-        // one layer and faded as a unit; per-paint alpha would let the glyph show
-        // through the fill. At full opacity (and for the hovered cell) there is
-        // no layer, so default rendering cost is unchanged.
-        val save = if (alpha < 255) canvas.saveLayerAlpha(tmp, alpha) else -1
         val selected = action == currentMode || (action == GestureAction.PAUSE && paused)
         canvas.drawRoundRect(tmp, radius, radius, if (selected) selectedPaint else bgPaint)
         if (hovered) canvas.drawRoundRect(tmp, radius, radius, hoverPaint)
-        // drawGlyph reuses tmp as scratch, but saveLayerAlpha has already consumed the bounds.
         drawGlyph(canvas, action, tmp.centerX(), tmp.centerY())
-        if (save >= 0) canvas.restoreToCount(save)
     }
 
     /**
@@ -331,5 +363,8 @@ class GestureMenu(private val context: Context) {
 
         /** The glyph box inside a cell. */
         private const val GLYPH_DP = 24f
+
+        /** No cell is hovered; distinct from [MenuGeometry.TOGGLE_INDEX] (-1). */
+        private const val NONE = Int.MIN_VALUE
     }
 }

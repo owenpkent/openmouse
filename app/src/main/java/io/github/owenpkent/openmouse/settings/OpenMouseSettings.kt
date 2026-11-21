@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
+import io.github.owenpkent.openmouse.cursor.Opacity
 import io.github.owenpkent.openmouse.update.LaunchCheck
 
 /**
@@ -60,15 +61,15 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
         set(value) = prefs.edit { putFloat(KEY_CURSOR_SCALE, value.coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)) }
 
-    /** Cross-hair opacity, [MIN_OPACITY]..[MAX_OPACITY] (1.0 = fully opaque). */
+    /** Cross-hair opacity, 0.3..1.0 (1.0 = fully opaque); [Opacity.clamp] also maps NaN to opaque. */
     var cursorOpacity: Float
-        get() = prefs.getFloat(KEY_CURSOR_OPACITY, DEFAULT_OPACITY).coerceIn(MIN_OPACITY, MAX_OPACITY)
-        set(value) = prefs.edit { putFloat(KEY_CURSOR_OPACITY, value.coerceIn(MIN_OPACITY, MAX_OPACITY)) }
+        get() = Opacity.clamp(prefs.getFloat(KEY_CURSOR_OPACITY, DEFAULT_OPACITY))
+        set(value) = prefs.edit { putFloat(KEY_CURSOR_OPACITY, Opacity.clamp(value)) }
 
-    /** Gesture dock opacity, [MIN_OPACITY]..[MAX_OPACITY]; the cell under the cursor stays opaque. */
+    /** Gesture dock opacity, 0.3..1.0; the cell under the cursor stays opaque. */
     var dockOpacity: Float
-        get() = prefs.getFloat(KEY_DOCK_OPACITY, DEFAULT_OPACITY).coerceIn(MIN_OPACITY, MAX_OPACITY)
-        set(value) = prefs.edit { putFloat(KEY_DOCK_OPACITY, value.coerceIn(MIN_OPACITY, MAX_OPACITY)) }
+        get() = Opacity.clamp(prefs.getFloat(KEY_DOCK_OPACITY, DEFAULT_OPACITY))
+        set(value) = prefs.edit { putFloat(KEY_DOCK_OPACITY, Opacity.clamp(value)) }
 
     /** Index into [CURSOR_COLORS]. */
     var cursorColorIndex: Int
@@ -148,9 +149,7 @@ class OpenMouseSettings(context: Context) {
         const val MIN_CURSOR_SCALE = 0.6f
         const val MAX_CURSOR_SCALE = 1.8f
 
-        const val DEFAULT_OPACITY = 1.0f
-        const val MIN_OPACITY = 0.3f
-        const val MAX_OPACITY = 1.0f
+        const val DEFAULT_OPACITY = Opacity.MAX_OPACITY
 
         /**
          * Cursor color presets; the chosen index is stored in prefs. Keep this in

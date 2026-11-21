@@ -32,16 +32,4 @@ class OpacityTest {
         assertEquals(1f, Opacity.clamp(Float.NaN), 0f)
         assertEquals(255, Opacity.toAlpha(Float.NaN))
     }
-
-    @Test
-    fun hoveredCellIsAlwaysOpaque() {
-        assertEquals(255, Opacity.cellAlpha(0.3f, hovered = true))
-        assertEquals(255, Opacity.cellAlpha(Float.NaN, hovered = true))
-    }
-
-    @Test
-    fun otherCellsUseDockOpacity() {
-        assertEquals(128, Opacity.cellAlpha(0.5f, hovered = false))
-        assertEquals(255, Opacity.cellAlpha(1f, hovered = false))
-    }
 }
