@@ -337,6 +337,7 @@ change, calls `applySettings()` to push the new values onto the live components:
 
 - dwell time / movement tolerance -> `DwellClicker.configure()`
 - cursor size / color -> `CursorView.setCursorScale()` / `setCursorColor()`
+- cursor / dock opacity -> `CursorView.setCursorOpacity()` / `GestureMenu.opacity` (alpha math in the pure `Opacity`)
 - menu side -> `GestureMenu.setDockRight()`
 - dwell on/off -> start or stop the dwell ticker (physical clicks still work)
 

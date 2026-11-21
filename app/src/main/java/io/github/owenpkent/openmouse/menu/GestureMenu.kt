@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import androidx.core.content.ContextCompat
 import io.github.owenpkent.openmouse.R
+import io.github.owenpkent.openmouse.cursor.Opacity
 
 /**
  * Everything the menu can do. TAP / DOUBLE_TAP / LONG_PRESS / DRAG / SWIPE /
@@ -56,6 +57,15 @@ class GestureMenu(private val context: Context) {
 
     /** Whether dwell clicking is paused; the Pause entry shows a play symbol and highlights. */
     var paused = false
+
+    /**
+     * Dock opacity, 0.3..1.0 (see [Opacity]). The set value is clamped; the
+     * caller redraws the view after changing it.
+     */
+    var opacity = 1f
+        set(value) {
+            field = Opacity.clamp(value)
+        }
 
     private val items = listOf(
         GestureAction.TAP,
@@ -172,10 +182,19 @@ class GestureMenu(private val context: Context) {
 
     private fun drawCell(canvas: Canvas, b: Bounds, action: GestureAction, cursorX: Float, cursorY: Float) {
         tmp.set(b.left, b.top, b.right, b.bottom)
+        val hovered = b.contains(cursorX, cursorY)
+        val alpha = Opacity.cellAlpha(opacity, hovered)
+        // The background and glyph overlap, so a translucent cell is drawn into
+        // one layer and faded as a unit; per-paint alpha would let the glyph show
+        // through the fill. At full opacity (and for the hovered cell) there is
+        // no layer, so default rendering cost is unchanged.
+        val save = if (alpha < 255) canvas.saveLayerAlpha(tmp, alpha) else -1
         val selected = action == currentMode || (action == GestureAction.PAUSE && paused)
         canvas.drawRoundRect(tmp, radius, radius, if (selected) selectedPaint else bgPaint)
-        if (b.contains(cursorX, cursorY)) canvas.drawRoundRect(tmp, radius, radius, hoverPaint)
+        if (hovered) canvas.drawRoundRect(tmp, radius, radius, hoverPaint)
+        // drawGlyph reuses tmp as scratch, but saveLayerAlpha has already consumed the bounds.
         drawGlyph(canvas, action, tmp.centerX(), tmp.centerY())
+        if (save >= 0) canvas.restoreToCount(save)
     }
 
     /**

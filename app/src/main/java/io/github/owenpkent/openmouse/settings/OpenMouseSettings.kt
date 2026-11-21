@@ -60,6 +60,16 @@ class OpenMouseSettings(context: Context) {
         get() = prefs.getFloat(KEY_CURSOR_SCALE, DEFAULT_CURSOR_SCALE).coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)
         set(value) = prefs.edit { putFloat(KEY_CURSOR_SCALE, value.coerceIn(MIN_CURSOR_SCALE, MAX_CURSOR_SCALE)) }
 
+    /** Cross-hair opacity, [MIN_OPACITY]..[MAX_OPACITY] (1.0 = fully opaque). */
+    var cursorOpacity: Float
+        get() = prefs.getFloat(KEY_CURSOR_OPACITY, DEFAULT_OPACITY).coerceIn(MIN_OPACITY, MAX_OPACITY)
+        set(value) = prefs.edit { putFloat(KEY_CURSOR_OPACITY, value.coerceIn(MIN_OPACITY, MAX_OPACITY)) }
+
+    /** Gesture dock opacity, [MIN_OPACITY]..[MAX_OPACITY]; the cell under the cursor stays opaque. */
+    var dockOpacity: Float
+        get() = prefs.getFloat(KEY_DOCK_OPACITY, DEFAULT_OPACITY).coerceIn(MIN_OPACITY, MAX_OPACITY)
+        set(value) = prefs.edit { putFloat(KEY_DOCK_OPACITY, value.coerceIn(MIN_OPACITY, MAX_OPACITY)) }
+
     /** Index into [CURSOR_COLORS]. */
     var cursorColorIndex: Int
         get() = prefs.getInt(KEY_CURSOR_COLOR, 0).coerceIn(0, CURSOR_COLORS.size - 1)
@@ -106,6 +116,8 @@ class OpenMouseSettings(context: Context) {
         private const val KEY_POST_ACTION_DP = "post_action_dp"
         private const val KEY_SCROLL_REPEAT_MS = "scroll_repeat_ms"
         private const val KEY_CURSOR_SCALE = "cursor_scale"
+        private const val KEY_CURSOR_OPACITY = "cursor_opacity"
+        private const val KEY_DOCK_OPACITY = "dock_opacity"
         private const val KEY_CURSOR_COLOR = "cursor_color"
         private const val KEY_MENU_RIGHT = "menu_right"
         private const val KEY_UPDATE_CHECK_ON_LAUNCH = "update_check_on_launch"
@@ -135,6 +147,10 @@ class OpenMouseSettings(context: Context) {
         const val DEFAULT_CURSOR_SCALE = 1.0f
         const val MIN_CURSOR_SCALE = 0.6f
         const val MAX_CURSOR_SCALE = 1.8f
+
+        const val DEFAULT_OPACITY = 1.0f
+        const val MIN_OPACITY = 0.3f
+        const val MAX_OPACITY = 1.0f
 
         /**
          * Cursor color presets; the chosen index is stored in prefs. Keep this in

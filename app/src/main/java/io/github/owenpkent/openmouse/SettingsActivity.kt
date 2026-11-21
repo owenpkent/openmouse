@@ -33,6 +33,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var postActionLabel: TextView
     private lateinit var repeatLabel: TextView
     private lateinit var sizeLabel: TextView
+    private lateinit var cursorOpacityLabel: TextView
+    private lateinit var dockOpacityLabel: TextView
 
     private var updateChecker: UpdateChecker? = null
 
@@ -46,6 +48,8 @@ class SettingsActivity : AppCompatActivity() {
         postActionLabel = findViewById(R.id.postActionLabel)
         repeatLabel = findViewById(R.id.repeatLabel)
         sizeLabel = findViewById(R.id.sizeLabel)
+        cursorOpacityLabel = findViewById(R.id.cursorOpacityLabel)
+        dockOpacityLabel = findViewById(R.id.dockOpacityLabel)
 
         setupDwellToggle()
         setupSliders()
@@ -100,6 +104,22 @@ class SettingsActivity : AppCompatActivity() {
             settings.cursorScale = value / 100f
             updateSizeLabel(value / 100f)
         }
+
+        val cursorOpacity = findViewById<Slider>(R.id.cursorOpacitySlider)
+        cursorOpacity.value = percent(settings.cursorOpacity)
+        updateOpacityLabel(cursorOpacityLabel, R.string.settings_cursor_opacity_value, settings.cursorOpacity)
+        cursorOpacity.addOnChangeListener { _, value, _ ->
+            settings.cursorOpacity = value / 100f
+            updateOpacityLabel(cursorOpacityLabel, R.string.settings_cursor_opacity_value, value / 100f)
+        }
+
+        val dockOpacity = findViewById<Slider>(R.id.dockOpacitySlider)
+        dockOpacity.value = percent(settings.dockOpacity)
+        updateOpacityLabel(dockOpacityLabel, R.string.settings_dock_opacity_value, settings.dockOpacity)
+        dockOpacity.addOnChangeListener { _, value, _ ->
+            settings.dockOpacity = value / 100f
+            updateOpacityLabel(dockOpacityLabel, R.string.settings_dock_opacity_value, value / 100f)
+        }
     }
 
     private fun updateDwellLabel(ms: Long) {
@@ -116,6 +136,13 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateRepeatLabel(ms: Long) {
         repeatLabel.text = getString(R.string.settings_scroll_repeat_value, ms.toInt())
+    }
+
+    // Rounded so a stored 0.7f (70.00001 after * 100) still lands on a slider step.
+    private fun percent(fraction: Float) = Math.round(fraction * 100f).toFloat()
+
+    private fun updateOpacityLabel(label: TextView, format: Int, fraction: Float) {
+        label.text = getString(format, Math.round(fraction * 100f))
     }
 
     private fun updateSizeLabel(scale: Float) {

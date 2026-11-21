@@ -254,6 +254,9 @@ class MouseAccessibilityService : AccessibilityService() {
         )
         cursorView?.setCursorScale(prefs.cursorScale)
         cursorView?.setCursorColor(prefs.cursorColor)
+        cursorView?.setCursorOpacity(prefs.cursorOpacity)
+        gestureMenu?.opacity = prefs.dockOpacity
+        cursorView?.invalidate() // the dock is drawn by the cursor view
         gestureMenu?.setDockRight(prefs.menuOnRight)
         // Moving the strip changes what sits under a still pointer; configure()
         // has already locked, so this only corrects the anchored entry.

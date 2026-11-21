@@ -79,6 +79,8 @@ class CursorView(context: Context) : View(context) {
     private val pendingRadius = 10f * d // start marker, intentionally unscaled
 
     private var cursorScale = 1f
+    private var cursorAlpha = 255 // 0..255, from the cursor opacity setting
+    private val layerRect = RectF()
     private val armLength get() = baseArm * cursorScale
     private val centerGap get() = baseGap * cursorScale
     private val maxCountdownRadius get() = baseCountdown * cursorScale
@@ -162,6 +164,12 @@ class CursorView(context: Context) : View(context) {
         invalidate()
     }
 
+    /** Set cross-hair opacity, 0.3..1.0. The dock has its own setting. */
+    fun setCursorOpacity(opacity: Float) {
+        cursorAlpha = Opacity.toAlpha(opacity)
+        invalidate()
+    }
+
     /** Set the cross-hair fill color (ARGB int). The dark outline is unchanged. */
     fun setCursorColor(color: Int) {
         fillPaint.color = color
@@ -217,6 +225,20 @@ class CursorView(context: Context) : View(context) {
 
         if (cursorX < 0f) return // no cursor to draw until the first move
 
+        // Fade the cross-hair as one shape: the dark outline is stroked under the
+        // coloured arm, so per-paint alpha would show the outline through the arm
+        // and look doubled. A layer with tight bounds (not the full screen) keeps
+        // the cost small, and at full opacity there is no layer at all.
+        val reach = maxOf(armLength, maxCountdownRadius) + baseOutlineStroke * cursorScale
+        layerRect.set(cursorX - reach, cursorY - reach, cursorX + reach, cursorY + reach)
+        val save = if (cursorAlpha < 255) canvas.saveLayerAlpha(layerRect, cursorAlpha) else -1
+        drawCrossHair(canvas)
+        if (save >= 0) canvas.restoreToCount(save)
+
+        badge?.let { drawBadge(canvas, it) }
+    }
+
+    private fun drawCrossHair(canvas: Canvas) {
         // Countdown shrinks toward the center as the dwell timer fills.
         if (countdown > 0f) {
             val radius = maxCountdownRadius * (1f - countdown)
@@ -228,8 +250,6 @@ class CursorView(context: Context) : View(context) {
         drawArms(canvas, outlinePaint)
         drawArms(canvas, fillPaint)
         canvas.drawCircle(cursorX, cursorY, dotRadius, dotPaint)
-
-        badge?.let { drawBadge(canvas, it) }
     }
 
     private fun drawBadge(canvas: Canvas, text: String) {
@@ -243,9 +263,12 @@ class CursorView(context: Context) : View(context) {
             viewHeight = height.toFloat(),
         )
         badgeRect.set(b.left, b.top, b.right, b.bottom)
+        // Pill and text overlap, so fade them together with a layer (see onDraw).
+        val save = if (cursorAlpha < 255) canvas.saveLayerAlpha(badgeRect, cursorAlpha) else -1
         canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgePaint)
         val baseline = badgeRect.centerY() - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
         canvas.drawText(text, badgeRect.centerX(), baseline, badgeTextPaint)
+        if (save >= 0) canvas.restoreToCount(save)
     }
 
     private fun drawArms(canvas: Canvas, paint: Paint) {

@@ -7,6 +7,12 @@ tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- Two opacity sliders in Settings, 30% to 100% (default 100%): one for the
+  cross-hair and its badge, one for the gesture dock. The dock cell under the
+  cursor always stays fully opaque so the dwell target is clear.
+
 ### Changed
 
 - The side dock is one column of glyph cells instead of two. A screen too
